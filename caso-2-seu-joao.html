@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Investigação Domiciliar — Seu João · Enigma do Cuidado</title>
+<style>
+  :root{
+    --accent:#8a5a2b; --accent-deep:#8a5a2b; --teal:#1F6F63; --cream:#F7F1E6; --ink:#241A10;
+    --paper:#FFFDF8; --line:#E4D9C6;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'Segoe UI',Inter,system-ui,sans-serif; background:var(--cream); color:var(--ink);}
+  .topbar{display:flex; justify-content:space-between; align-items:center; background:var(--ink); color:#fff; padding:0.8rem 1.2rem;}
+  .topbar-title a{color:#fff; text-decoration:none; font-weight:600;}
+  .topbar-title small{display:block; font-weight:400; opacity:0.75; font-size:0.75rem;}
+  .a11y-bar{display:flex; gap:0.4rem;}
+  .a11y-btn{background:rgba(255,255,255,0.12); border:none; color:#fff; border-radius:6px; padding:0.35rem 0.6rem; cursor:pointer;}
+  .screen{display:none; max-width:960px; margin:0 auto; padding:1.5rem;}
+  .screen.active{display:block;}
+  .btn{border:none; border-radius:8px; padding:0.65rem 1.1rem; font-weight:600; cursor:pointer; font-size:0.95rem;}
+  .btn-primary{background:var(--accent); color:#fff;}
+  .btn-ghost{background:#fff; border:1px solid var(--line); color:var(--ink);}
+  .btn-sm{padding:0.4rem 0.7rem; font-size:0.85rem;}
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:1rem; margin-bottom:0.8rem; box-shadow:0 2px 6px rgba(0,0,0,0.04);}
+  .lock-screen{position:fixed; inset:0; background:var(--ink); display:flex; align-items:center; justify-content:center; z-index:9999;}
+  .lock-box{background:#fff; border-radius:14px; padding:2rem; width:90%; max-width:380px; text-align:center;}
+  .lock-box input{width:100%; padding:0.7rem; border-radius:8px; border:1px solid var(--line); margin:0.8rem 0; font-size:1rem; text-align:center;}
+  .eye-toggle{cursor:pointer; user-select:none; font-size:0.85rem; color:#777;}
+  .lock-error{color:#b7480d; font-size:0.85rem; display:none; margin-top:0.4rem;}
+  #teacherLockScreen{z-index:10000;}
+  .scene-wrap{position:relative; width:100%; border-radius:12px; overflow:hidden; border:1px solid var(--line); margin:1rem 0; background:#000;}
+  .scene-wrap img{width:100%; display:block;}
+  #hotspotLayer{position:absolute; inset:0;}
+  .hotspot-marker{position:absolute; width:42px; height:42px; margin-left:-21px; margin-top:-21px; border-radius:50%;
+    background:rgba(255,255,255,0.92); border:3px solid var(--accent); display:flex; align-items:center; justify-content:center;
+    font-size:1.3rem; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.35); animation:pulse 2s infinite;}
+  .hotspot-marker.found{border-color:var(--teal); background:rgba(234,246,243,0.95); animation:none;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,0.55);} 70%{box-shadow:0 0 0 12px rgba(255,255,255,0);} 100%{box-shadow:0 0 0 0 rgba(255,255,255,0);}}
+  .hotspot-list{display:flex; flex-wrap:wrap; gap:0.5rem; margin:0.8rem 0;}
+  .hotspot-chip{border:1px solid var(--line); border-radius:20px; padding:0.3rem 0.8rem; font-size:0.8rem; background:var(--paper);}
+  .hotspot-chip.found{border-color:var(--teal); background:#eaf6f3;}
+  .sidebar{display:flex; flex-wrap:wrap; gap:0.5rem; margin:1rem 0;}
+  .modal-overlay{display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:5000; align-items:center; justify-content:center;}
+  .modal-overlay.active{display:flex;}
+  .modal{background:#fff; border-radius:14px; max-width:520px; width:92%; max-height:85vh; overflow:auto; padding:1.4rem;}
+  .modal h3{margin-top:0;}
+  .chat-log{height:260px; overflow-y:auto; background:#faf7f0; border:1px solid var(--line); border-radius:8px; padding:0.7rem; margin-bottom:0.6rem;}
+  .chat-msg{margin-bottom:0.6rem; padding:0.5rem 0.7rem; border-radius:8px; max-width:85%;}
+  .chat-msg.me{background:var(--accent); color:#fff; margin-left:auto;}
+  .chat-msg.patient{background:#fff; border:1px solid var(--line);}
+  .chat-input-row{display:flex; gap:0.5rem;}
+  .chat-input-row input{flex:1; padding:0.6rem; border-radius:8px; border:1px solid var(--line);}
+  .checklist label{display:block; margin:0.4rem 0; cursor:pointer;}
+  textarea{width:100%; min-height:100px; border-radius:8px; border:1px solid var(--line); padding:0.6rem; font-family:inherit;}
+  .toast{position:fixed; bottom:1.2rem; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:0.6rem 1.1rem; border-radius:8px; opacity:0; transition:all .25s; z-index:6000;}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  h1,h2,h3{font-family:'Georgia',serif;}
+  .badge{display:inline-block; background:var(--teal); color:#fff; border-radius:20px; padding:0.15rem 0.6rem; font-size:0.75rem;}
+  .footer-nav{display:flex; justify-content:space-between; margin-top:1.2rem;}
+</style>
+</head>
+<body>
+
+<!-- ============== LOCK SCREEN (ALUNO) ============== -->
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-box">
+    <h2>🔒 Acesso restrito · Caso 2</h2>
+    <p style="color:#666; font-size:0.9rem;">Peça a senha do caso à professora.</p>
+    <input type="password" id="pwInput" placeholder="Senha do caso">
+    <div class="eye-toggle" onclick="togglePw()">👁️ mostrar/ocultar senha</div>
+    <div class="lock-error" id="pwError">Senha incorreta. Tente novamente.</div>
+    <br>
+    <button class="btn btn-primary" onclick="checkPassword()">Entrar</button>
+  </div>
+</div>
+
+<!-- ============== LOCK SCREEN (PROFESSORA) ============== -->
+<div class="lock-screen" id="teacherLockScreen" style="display:none;">
+  <div class="lock-box">
+    <h2>👩‍🏫 Painel da professora</h2>
+    <input type="password" id="teacherLockInput" placeholder="Senha da professora">
+    <div class="lock-error" id="teacherLockError">Senha incorreta.</div>
+    <br>
+    <button class="btn btn-primary" onclick="checkTeacherPassword()">Entrar</button>
+    <button class="btn btn-ghost" onclick="closeTeacherLock()">Cancelar</button>
+  </div>
+</div>
+
+<!-- ============== TOPO ============== -->
+<div class="topbar">
+  <div class="topbar-title">
+    <a href="index.html">← Investigação Domiciliar</a>
+    <small>Alterações do Sistema Osteomuscular · Seu João, 79 anos · Enigma do Cuidado</small>
+  </div>
+  <div class="a11y-bar">
+    <button class="a11y-btn" title="Painel da professora" onclick="openTeacherLock()">👩‍🏫</button>
+  </div>
+</div>
+
+<!-- ============== TELA 1: CENA / INVESTIGAÇÃO ============== -->
+<section id="screen-scene" class="screen active">
+  <div class="card">
+    <h1>Investigação domiciliar — Seu João</h1>
+    <p>Você chega para a visita domiciliar de Seu João. Ele está sentado numa poltrona surrada da sala, segurando a bengala. Ao lado, uma escada íngreme sem corrimão leva ao andar de cima. Na mesinha de centro, a Caderneta da Pessoa Idosa e um comprovante de vacinação.</p>
+    <span class="badge" id="foundCounter">0 de 5 pistas encontradas</span>
+  </div>
+
+  <div class="sidebar">
+    <button class="btn btn-ghost btn-sm" onclick="soundlessClick(); window.open('caderneta-pessoa-idosa.pdf','_blank','noopener');">📖 Consultar Caderneta</button>
+    <button class="btn btn-primary btn-sm" onclick="soundlessClick(); window.open('https://docs.google.com/forms/d/e/1FAIpQLScArE3VsH9GoZGAcTGAO3Hv8q4ZpKUC3B8oSPO2Ucsf3Lt5eg/viewform?usp=header','_blank','noopener');">📋 Preencher Caderneta</button>
+    <button class="btn btn-ghost btn-sm" onclick="openModal('modalNotebook')">📓 Bloco de notas</button>
+    <button class="btn btn-ghost btn-sm" onclick="openVax()">💉 Caderneta de vacinação</button>
+    <button class="btn btn-ghost btn-sm" onclick="openModal('modalChat')">💬 Conversar com João</button>
+  </div>
+
+  <div class="scene-wrap">
+    <img src="caso-2-cena.jpg" alt="Cena da visita domiciliar — Seu João">
+    <div id="hotspotLayer"></div>
+  </div>
+  <div class="hotspot-list" id="hotspotList"></div>
+
+  <div class="footer-nav">
+    <span></span>
+    <button class="btn btn-primary" onclick="openModal('modalAssessment')">✅ Ir para avaliação final</button>
+  </div>
+</section>
+
+<!-- ============== MODAL: PISTA ============== -->
+<div class="modal-overlay" id="modalClue">
+  <div class="modal">
+    <h3 id="clueTitle"></h3>
+    <p id="clueText"></p>
+    <button class="btn btn-primary" onclick="closeModal('modalClue')">Fechar</button>
+  </div>
+</div>
+
+<!-- ============== MODAL: CADERNETA DE VACINAÇÃO (leitura) ============== -->
+<div class="modal-overlay" id="modalVax">
+  <div class="modal">
+    <p style="font-size:0.75rem; color:#999; text-transform:uppercase; letter-spacing:0.05em;">Documento · Material didático fictício</p>
+    <h3>💉 Caderneta de Vacinação</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem 1rem; font-size:0.9rem; margin-bottom:0.8rem; background:#faf7f0; border:1px solid var(--line); border-radius:8px; padding:0.7rem;">
+      <div><strong>Nome:</strong> Seu João</div>
+      <div><strong>Idade:</strong> 79 anos</div>
+      <div><strong>Cartão SUS:</strong> •••• •••• 8871</div>
+      <div><strong>Unidade de referência:</strong> UBS de referência não informada</div>
+    </div>
+    <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+      <thead>
+        <tr style="text-align:left; border-bottom:2px solid var(--line);">
+          <th style="padding:0.4rem;">Vacina</th><th style="padding:0.4rem;">Última dose</th><th style="padding:0.4rem;">Situação</th>
+        </tr>
+      </thead>
+      <tbody id="vaxTableBody"></tbody>
+    </table>
+    <p style="font-size:0.78rem; color:#888; margin-top:0.8rem;">Documento fictício para fins de simulação. Situações incompletas não devem ser interpretadas automaticamente — investigue e discuta com o grupo.</p>
+    <button class="btn btn-primary" onclick="closeModal('modalVax')">Fechar</button>
+  </div>
+</div>
+
+<!-- ============== MODAL: BLOCO DE NOTAS ============== -->
+<div class="modal-overlay" id="modalNotebook">
+  <div class="modal">
+    <h3>📓 Bloco de notas</h3>
+    <p style="font-size:0.85rem; color:#777;">Pistas encontradas até agora:</p>
+    <ul id="notebookList"></ul>
+    <button class="btn btn-primary" onclick="closeModal('modalNotebook')">Fechar</button>
+  </div>
+</div>
+
+<!-- ============== MODAL: CHAT ============== -->
+<div class="modal-overlay" id="modalChat">
+  <div class="modal">
+    <h3>💬 Conversa com Seu João <span id="brainBadge" style="font-size:0.7rem; font-weight:400; color:#888;"></span></h3>
+    <div class="chat-log" id="chatLog"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" placeholder="Digite sua pergunta..." onkeydown="if(event.key==='Enter')sendChat()">
+      <button class="btn btn-primary" onclick="sendChat()">Enviar</button>
+    </div>
+    <button class="btn btn-ghost btn-sm" style="margin-top:0.6rem;" onclick="closeModal('modalChat')">Fechar</button>
+  </div>
+</div>
+
+<!-- ============== MODAL: AVALIAÇÃO FINAL ============== -->
+<div class="modal-overlay" id="modalAssessment">
+  <div class="modal">
+    <h3>✅ Avaliação final</h3>
+    <p><strong>1. Selecione os 3 principais problemas encontrados:</strong></p>
+    <div class="checklist" id="problemsChecklist"></div>
+    <p><strong>2. Anotação de enfermagem (resumo dos achados):</strong></p>
+    <textarea id="nursingNote" placeholder="Escreva aqui sua anotação de enfermagem..."></textarea>
+    <p><strong>3. Qual avaliação ficou faltando?</strong></p>
+    <select id="missingSelect" style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--line);"></select>
+    <br><br>
+    <button class="btn btn-primary" onclick="submitAssessment()">Enviar avaliação</button>
+    <button class="btn btn-ghost btn-sm" onclick="closeModal('modalAssessment')">Fechar</button>
+  </div>
+</div>
+
+<!-- ============== MODAL: RESULTADOS ============== -->
+<div class="modal-overlay" id="modalResults">
+  <div class="modal">
+    <h3>🎉 Avaliação enviada!</h3>
+    <p>Muito bem! Revise com a turma:</p>
+    <p><strong>Problemas que você selecionou:</strong></p>
+    <ul id="resProblems"></ul>
+    <p><strong>Avaliação que ficou faltando (para discutir em grupo):</strong></p>
+    <ul id="resMissing"></ul>
+    <button class="btn btn-primary" onclick="closeModal('modalResults')">Fechar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TEACHER_PASSWORD = "professorenf2026";
+const CASE_PASSWORD = "enf4040";
+const PREFIX = "caso2_";
+const ACTIVITY_KEY = PREFIX + "activityLog";
+
+const CASE = {
+  name: "Seu João",
+  age: 79,
+  hotspots: [{"icon": "🦯", "top": 58, "left": 44, "label": "A bengala", "clue": "A bengala de Seu João tem sinais visíveis de conserto improvisado, como se tivesse sido remendada. Não parece muito firme, e ele não demonstra segurança ao apoiar-se nela."}, {"icon": "🪜", "top": 32, "left": 66, "label": "A escada sem corrimão", "clue": "Há degraus na sala sem corrimão. Seu João evita usá-la porque sente falta de ar e dor lombar ao subir."}, {"icon": "💉", "top": 82, "left": 27, "label": "Comprovante de vacinação", "clue": "Um papel antigo da UBS mostra que Seu João recebeu a vacina contra influenza há aproximadamente dois anos. Não há registros mais recentes."}, {"icon": "🛋️", "top": 52, "left": 10, "label": "O sofá surrado e rasgado", "clue": "O sofá está em más condições, com molas aparentes em alguns pontos — o mobiliário da sala, de modo geral, é bem desgastado e pode interferir na mobilidade e segurança dentro de casa."}, {"icon": "📺", "top": 45, "left": 93, "label": "A poltrona onde ele está sentado", "clue": "A poltrona é baixa e bem desgastada — dá pra perceber que seria difícil se levantar dela sem apoio firme."}],
+  problemsOptions: ["Dor lombar crônica", "Uso inadequado de dispositivo de auxílio à marcha (bengala)", "Risco de queda relacionado ao ambiente (degraus sem corrimão)", "Limitação funcional para caminhar", "Dispneia aos pequenos esforços", "Situação vacinal desatualizada/incompleta", "Mobiliário domiciliar inadequado", "Dificuldade para subir escadas"],
+  assessmentOptions: ["Avaliação da dor", "Avaliação da mobilidade", "Avaliação da marcha", "Avaliação do equilíbrio", "Avaliação do risco de quedas", "Avaliação da capacidade funcional", "Avaliação do uso da bengala", "Avaliação do ambiente domiciliar", "Avaliação respiratória", "Avaliação da vacinação", "Avaliação nutricional"],
+  missingAnswer: "Avaliação nutricional",
+  vaccination: {"birthInfo": "79 anos", "cns": "•••• •••• 8871", "ubs": "UBS de referência não informada", "records": [{"vaccine": "Influenza (gripe)", "lastDose": "~2 anos atrás", "status": "Registro antigo — não tomou este ano"}, {"vaccine": "COVID-19", "lastDose": "—", "status": "Sem registro"}, {"vaccine": "Hepatite B", "lastDose": "—", "status": "Sem registro"}, {"vaccine": "dT (Dupla adulto)", "lastDose": "—", "status": "Sem registro"}, {"vaccine": "Pneumocócica 23-valente", "lastDose": "—", "status": "Sem registro"}]},
+  personaSummary: "Homem de 79 anos, convive há mais de dois anos com dor lombar intensa. Tenta manter sua rotina apesar da dor e da dificuldade para caminhar, não gosta muito de reclamar, é do tipo que 'vai levando'. Pode minimizar suas dificuldades.",
+  speechStyle: ["Essa dor nas costas não me larga.", "Ando devagar, com a bengala mesmo.", "Escada é osso pra mim.", "Não sei direito quais vacinas eu tomei.", "Vou levando."],
+  knownFacts: ["Sente dor intensa na coluna lombar há mais de dois anos.", "Tem limitação importante para caminhar.", "Usa uma bengala, mas de forma inadequada; nunca foi orientado sobre o uso correto.", "Sente falta de ar em pequenos esforços.", "Tem dificuldade para subir escadas.", "Não tomou a vacina contra influenza este ano.", "Não sabe ao certo quais vacinas já tomou; existe um documento antigo da UBS mostrando uma dose de influenza de aproximadamente dois anos atrás."],
+  sceneContext: "Você está na sala de Seu João. Ele está sentado em uma poltrona bem desgastada, com a bengala apoiada ao lado. O sofá também está em más condições. Há alguns degraus na sala sem corrimão. Em algum lugar da sala há um papel antigo da UBS sobre vacinação.",
+  patientResponses: [{"q": "Como está a dor nas costas?", "a": "Essa dor na coluna não me larga há mais de dois anos, viu.", "kw": ["dor", "coluna", "costas", "lombar"]}, {"q": "O senhor consegue caminhar bem?", "a": "Ando bem devagar, com a bengala mesmo. Não é fácil não.", "kw": ["caminhar", "andar", "marcha"]}, {"q": "Como o senhor usa a bengala?", "a": "Uso do jeito que dá... nunca ninguém me explicou direito como é o certo.", "kw": ["bengala", "apoio"]}, {"q": "O senhor sente falta de ar?", "a": "Só quando faço mais força, aí eu canso rápido e fico ofegante.", "kw": ["falta de ar", "ofegante", "cansaco", "respira"]}, {"q": "O senhor tem dificuldade para subir escada?", "a": "Escada é osso pra mim, confesso. Subo bem devagarzinho.", "kw": ["escada", "degrau", "subir"]}, {"q": "O senhor tomou a vacina da gripe esse ano?", "a": "Não, esse ano eu não tomei não.", "kw": ["vacina", "gripe", "influenza"]}, {"q": "O senhor sabe quais vacinas já tomou?", "a": "Olha, nem sei direito quais vacinas eu tomei. Faz tempo.", "kw": ["quais vacinas", "caderneta", "historico vacinal"]}, {"q": "Como o senhor se sente hoje?", "a": "Vou levando, com essa dor de sempre. Vida que segue.", "kw": ["sente hoje", "como esta", "saude"]}]
+};
+
+let state = { found: new Set(), apiChatHistory: [] };
+
+/* ---------- SENHA ALUNO ---------- */
+function togglePw(){
+  const el = document.getElementById('pwInput');
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+function checkPassword(){
+  const val = document.getElementById('pwInput').value;
+  if(val === CASE_PASSWORD){
+    document.getElementById('lockScreen').style.display = 'none';
+    sessionStorage.setItem(PREFIX + 'unlocked', '1');
+    logActivity('Acesso liberado', '');
+  } else {
+    document.getElementById('pwError').style.display = 'block';
+  }
+}
+if(sessionStorage.getItem(PREFIX + 'unlocked') === '1'){
+  document.addEventListener('DOMContentLoaded', ()=>{ document.getElementById('lockScreen').style.display='none'; });
+}
+
+/* ---------- SENHA PROFESSORA ---------- */
+function openTeacherLock(){
+  document.getElementById('teacherLockScreen').style.display = 'flex';
+  document.getElementById('teacherLockInput').value = '';
+  document.getElementById('teacherLockError').style.display = 'none';
+  setTimeout(()=>document.getElementById('teacherLockInput').focus(), 100);
+}
+function closeTeacherLock(){
+  document.getElementById('teacherLockScreen').style.display = 'none';
+}
+function checkTeacherPassword(){
+  const val = document.getElementById('teacherLockInput').value;
+  if(val === TEACHER_PASSWORD){
+    closeTeacherLock();
+    showTeacherPanel();
+  } else {
+    document.getElementById('teacherLockError').style.display = 'block';
+  }
+}
+function showTeacherPanel(){
+  const log = JSON.parse(localStorage.getItem(ACTIVITY_KEY) || '[]');
+  let html = '<h3>👩\u200d🏫 Painel da professora — Caso 2</h3><p style="font-size:0.85rem;color:#777;">Registro de atividade (neste dispositivo):</p><ul>';
+  if(log.length === 0) html += '<li>Nenhuma atividade registrada ainda.</li>';
+  log.forEach(item => { html += `<li>[${item.time}] ${item.type} ${item.detail ? '— ' + item.detail : ''}</li>`; });
+  html += '</ul><button class="btn btn-ghost btn-sm" onclick="clearActivity()">Limpar registro</button>';
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay active';
+  modal.id = 'modalTeacherPanel';
+  modal.innerHTML = `<div class="modal">${html}<br><br><button class="btn btn-primary" onclick="closeModal('modalTeacherPanel')">Fechar</button></div>`;
+  document.body.appendChild(modal);
+}
+function clearActivity(){
+  localStorage.removeItem(ACTIVITY_KEY);
+  closeModal('modalTeacherPanel');
+  showToast('Registro limpo.');
+}
+
+/* Deep link vindo da landing: ?painel=professora */
+(function checkTeacherDeepLink(){
+  const params = new URLSearchParams(window.location.search);
+  if(params.get('painel') === 'professora'){
+    setTimeout(openTeacherLock, 300);
+  }
+})();
+
+/* ---------- ATIVIDADE ---------- */
+function logActivity(type, detail){
+  const log = JSON.parse(localStorage.getItem(ACTIVITY_KEY) || '[]');
+  log.push({ time: new Date().toLocaleString('pt-BR'), type, detail });
+  localStorage.setItem(ACTIVITY_KEY, JSON.stringify(log));
+}
+
+/* ---------- HOTSPOTS ---------- */
+function renderHotspots(){
+  const layer = document.getElementById('hotspotLayer');
+  layer.innerHTML = '';
+  CASE.hotspots.forEach((h, i) => {
+    const marker = document.createElement('div');
+    marker.className = 'hotspot-marker' + (state.found.has(i) ? ' found' : '');
+    marker.style.top = h.top + '%';
+    marker.style.left = h.left + '%';
+    marker.textContent = h.icon;
+    marker.title = h.label;
+    marker.onclick = () => openClue(i);
+    layer.appendChild(marker);
+  });
+  const list = document.getElementById('hotspotList');
+  list.innerHTML = '';
+  CASE.hotspots.forEach((h, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'hotspot-chip' + (state.found.has(i) ? ' found' : '');
+    chip.textContent = (state.found.has(i) ? '✓ ' : '') + h.label;
+    list.appendChild(chip);
+  });
+  document.getElementById('foundCounter').textContent = `${state.found.size} de ${CASE.hotspots.length} pistas encontradas`;
+}
+function openClue(i){
+  const h = CASE.hotspots[i];
+  state.found.add(i);
+  document.getElementById('clueTitle').textContent = h.label;
+  document.getElementById('clueText').textContent = h.clue;
+  openModal('modalClue');
+  renderHotspots();
+  logActivity('Pista encontrada', h.label);
+}
+
+/* ---------- BLOCO DE NOTAS ---------- */
+function renderNotebook(){
+  const ul = document.getElementById('notebookList');
+  ul.innerHTML = '';
+  if(state.found.size === 0){ ul.innerHTML = '<li>Nenhuma pista encontrada ainda.</li>'; return; }
+  state.found.forEach(i => {
+    const h = CASE.hotspots[i];
+    const li = document.createElement('li');
+    li.innerHTML = `<strong>${h.label}:</strong> ${h.clue}`;
+    ul.appendChild(li);
+  });
+}
+
+/* ---------- CHAT ---------- */
+function renderChatIntro(){
+  const log = document.getElementById('chatLog');
+  if(log.children.length === 0){
+    const div = document.createElement('div');
+    div.className = 'chat-msg patient';
+    div.textContent = `Oi... pode perguntar o que quiser.`;
+    log.appendChild(div);
+  }
+}
+
+/* Monta o "system prompt" do Patient Brain a partir dos dados do caso. */
+function buildSystemPrompt(){
+  const investigated = CASE.hotspots.filter((h,i)=>state.found.has(i)).map(h=>h.label);
+  return `Você é ${CASE.name}, ${CASE.age} anos. ${CASE.personaSummary}
+
+SUA FALA: linguagem simples do dia a dia, frases curtas (1 a 3 frases, nunca um parágrafo longo). Nunca fale como profissional de saúde, prontuário ou IA. Exemplos de tom (não copie ao pé da letra, varie naturalmente): ${CASE.speechStyle.map(s=>'"'+s+'"').join(" / ")}
+
+O QUE VOCÊ SABE E PODE CONTAR (só quando perguntarem, nunca tudo de uma vez, nunca com termos técnicos):
+${CASE.knownFacts.map(f=>"- "+f).join("\n")}
+
+CENA ATUAL: ${CASE.sceneContext}
+${investigated.length ? "O(a) estudante já observou estes objetos do ambiente: " + investigated.join(", ") + "." : ""}
+
+REGRAS ABSOLUTAS:
+- NUNCA invente nomes de remédios, doses, horários, valores de pressão, resultados de exames, diagnósticos, sintomas, familiares, histórico médico, alergias, internações, cirurgias ou vacinas que não estejam na lista acima. Se não souber, responda algo como "não sei te dizer" ou "não lembro disso".
+- NUNCA dê diagnóstico clínico, interpretação de enfermagem, classificação de risco ou conclusão médica — você é o(a) paciente, quem investiga e interpreta é o(a) estudante.
+- NUNCA fale como resumo de prontuário — sempre em primeira pessoa, natural, como uma pessoa idosa conversando.
+- Se a pergunta for confusa, longa ou você "não ouvir bem", ocasionalmente peça para repetir ou falar mais alto — não faça isso sempre, só de vez em quando.
+- Ajuste seu tom ao longo da conversa: se o(a) estudante for acolhedor(a) e educado(a), fique mais aberto(a); se for brusco(a) ou fizer perguntas invasivas demais, fique mais fechado(a), seco(a) ou incomodado(a) (sem ser rude).
+- Nunca revele que é uma IA ou personagem simulado. Nunca saia do personagem.
+- Responda sempre em português do Brasil.`;
+}
+
+const PATIENT_BRAIN_PROVIDER = "gemini";
+const PATIENT_BRAIN_ENDPOINT = "https://patient-brain-proxy.caueprado204.workers.dev";
+
+async function callPatientBrain(userMessage){
+  const system = buildSystemPrompt();
+  try{
+    const text = await callGemini(system, userMessage);
+    if(!text) throw new Error("resposta vazia");
+    return { text, source: "ai" };
+  }catch(err){
+    console.warn("Patient Brain (IA) indisponível — usando respostas offline:", err);
+    return { text: fallbackAnswer(userMessage), source: "offline" };
+  }
+}
+
+async function callGemini(system, userMessage){
+  const contents = state.apiChatHistory.map(m => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }]
+  }));
+  contents.push({ role: "user", parts: [{ text: userMessage }] });
+
+  const response = await fetch(PATIENT_BRAIN_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: system }] },
+      contents: contents
+    })
+  });
+  if(!response.ok) throw new Error("HTTP " + response.status);
+  const data = await response.json();
+  const candidate = data.candidates && data.candidates[0];
+  const parts = candidate && candidate.content && candidate.content.parts;
+  return parts ? parts.map(p => p.text).join("\n").trim() : "";
+}
+
+function normalizeText(str){
+  return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+function fallbackAnswer(msg){
+  const norm = normalizeText(msg);
+  for(const r of CASE.patientResponses){
+    for(const kw of (r.kw || [])){
+      if(norm.includes(normalizeText(kw))) return r.a;
+    }
+  }
+  const fallbacks = ["Não sei te dizer, meu filho.", "Não lembro disso, não.", "Ah, essa eu não sei explicar direito."];
+  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+}
+
+function setBrainBadge(source){
+  const badge = document.getElementById('brainBadge');
+  if(!badge) return;
+  if(source === 'ai'){ badge.textContent = '🟢 IA ativa'; badge.title = 'Resposta gerada pela IA (Gemini)'; }
+  else { badge.textContent = '🟡 Modo offline'; badge.title = 'IA indisponível — respondendo com o banco de respostas fixas'; }
+}
+
+async function sendChat(){
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if(!msg) return;
+  const log = document.getElementById('chatLog');
+  const me = document.createElement('div');
+  me.className = 'chat-msg me';
+  me.textContent = msg;
+  log.appendChild(me);
+  input.value = '';
+  logActivity('Pergunta enviada', msg);
+  log.scrollTop = log.scrollHeight;
+
+  const typing = document.createElement('div');
+  typing.className = 'chat-msg patient';
+  typing.textContent = '…';
+  log.appendChild(typing);
+  log.scrollTop = log.scrollHeight;
+
+  const res = await callPatientBrain(msg);
+  typing.textContent = res.text;
+  setBrainBadge(res.source);
+  state.apiChatHistory.push({role: "user", content: msg});
+  state.apiChatHistory.push({role: "assistant", content: res.text});
+  log.scrollTop = log.scrollHeight;
+}
+
+/* ---------- AVALIAÇÃO FINAL ---------- */
+function renderAssessment(){
+  const div = document.getElementById('problemsChecklist');
+  div.innerHTML = '';
+  CASE.problemsOptions.forEach(opt => {
+    const label = document.createElement('label');
+    label.innerHTML = `<input type="checkbox" value="${opt}"> ${opt}`;
+    div.appendChild(label);
+  });
+  const sel = document.getElementById('missingSelect');
+  sel.innerHTML = '<option value="">-- selecione --</option>';
+  CASE.assessmentOptions.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt; o.textContent = opt;
+    sel.appendChild(o);
+  });
+}
+function submitAssessment(){
+  const checked = Array.from(document.querySelectorAll('#problemsChecklist input:checked')).map(c => c.value);
+  const note = document.getElementById('nursingNote').value;
+  const missing = document.getElementById('missingSelect').value;
+  logActivity('Avaliação final enviada', `Problemas: ${checked.join('; ')} | Faltou: ${missing}`);
+  document.getElementById('resProblems').innerHTML = checked.length
+    ? checked.map(p => `<li>${p}</li>`).join('')
+    : '<li>Nenhum problema selecionado.</li>';
+  document.getElementById('resMissing').innerHTML = `<li>${CASE.missingAnswer}</li>`;
+  closeModal('modalAssessment');
+  openModal('modalResults');
+}
+
+/* ---------- CADERNETA DE VACINAÇÃO (leitura) ---------- */
+function openVax(){
+  const tbody = document.getElementById('vaxTableBody');
+  tbody.innerHTML = '';
+  CASE.vaccination.records.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid var(--line)';
+    tr.innerHTML = `<td style="padding:0.4rem;">${r.vaccine}</td><td style="padding:0.4rem;">${r.lastDose}</td><td style="padding:0.4rem;">${r.status}</td>`;
+    tbody.appendChild(tr);
+  });
+  logActivity('Consultou caderneta de vacinação', '');
+  openModal('modalVax');
+}
+
+/* ---------- MODAIS ---------- */
+function openModal(id){
+  document.getElementById(id).classList.add('active');
+  if(id === 'modalNotebook') renderNotebook();
+  if(id === 'modalChat') renderChatIntro();
+  if(id === 'modalAssessment') renderAssessment();
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove('active');
+  const el = document.getElementById(id);
+  if(id === 'modalTeacherPanel' && el) el.remove();
+}
+document.querySelectorAll('.modal-overlay').forEach(ov => {
+  ov.addEventListener('click', e => { if(e.target === ov) ov.classList.remove('active'); });
+});
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+function soundlessClick(){}
+
+/* ---------- INIT ---------- */
+renderHotspots();
+</script>
+</body>
+</html>

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enigma do Cuidado — Plataforma de Simulação Clínica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream: #F7F1E6;
+    --cream-deep: #EFE4CF;
+    --paper: #FFFDF9;
+    --ink: #241A10;
+    --ink-soft: #5C4C3B;
+    --line: #DFCEAE;
+    --amber: #E2661C;
+    --amber-deep: #B7480D;
+    --amber-pale: #F7DDC4;
+    --teal: #1F6F63;
+    --teal-deep: #14453D;
+    --teal-pale: #DCEFEA;
+    --red-pin: #C23B22;
+    --shadow-card: 0 18px 40px -18px rgba(36,26,16,0.35);
+    --shadow-sm: 0 4px 14px -6px rgba(36,26,16,0.25);
+    --radius: 14px;
+    --font-display: "Fraunces", Georgia, serif;
+    --font-body: "Inter", -apple-system, sans-serif;
+    --font-mono: "IBM Plex Mono", monospace;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--cream);
+    color:var(--ink);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+  }
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto;}
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+
+  /* texture: faint paper grain via layered radial dots */
+  body::before{
+    content:"";
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image: radial-gradient(rgba(36,26,16,0.035) 1px, transparent 1px);
+    background-size: 3px 3px;
+    opacity:0.5;
+  }
+
+  a{color:inherit;}
+  img{max-width:100%; display:block;}
+  .wrap{max-width:74rem; margin:0 auto; padding:0 1.75rem; position:relative; z-index:1;}
+  :focus-visible{outline:2.5px solid var(--teal); outline-offset:3px;}
+
+  /* ---------- eyebrow / stamp / mono labels ---------- */
+  .eyebrow{
+    font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--amber-deep); font-weight:600;
+  }
+  .stamp{
+    display:inline-flex; align-items:center; gap:0.4rem;
+    border:1.5px solid var(--red-pin); color:var(--red-pin);
+    font-family:var(--font-mono); font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
+    padding:0.3rem 0.7rem; border-radius:5px;
+    transform:rotate(-3deg);
+    background:rgba(194,59,34,0.04);
+  }
+
+  /* ---------- nav ---------- */
+  header.nav{
+    position:sticky; top:0; z-index:50;
+    background:rgba(247,241,230,0.88); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .nav-row{display:flex; align-items:center; justify-content:space-between; padding:1.05rem 0;}
+  .wordmark{display:flex; align-items:center; gap:0.55rem; font-family:var(--font-display); font-weight:600; font-size:1.28rem; letter-spacing:-0.01em; text-decoration:none;}
+  .wordmark .mark{
+    width:2rem; height:2rem; border-radius:50%;
+    background:var(--ink); color:var(--cream);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-mono); font-size:0.85rem; font-weight:600;
+    flex-shrink:0;
+  }
+  nav.links{display:flex; gap:2rem; align-items:center;}
+  nav.links a{
+    font-size:0.88rem; font-weight:500; text-decoration:none; color:var(--ink-soft);
+    padding-bottom:0.2rem; border-bottom:1.5px solid transparent; transition:color .18s, border-color .18s;
+  }
+  nav.links a:hover{color:var(--amber-deep); border-color:var(--amber-deep);}
+  .btn{
+    font-family:var(--font-body); font-weight:600; font-size:0.86rem;
+    padding:0.7rem 1.35rem; border-radius:999px; border:none; cursor:pointer;
+    display:inline-flex; align-items:center; gap:0.45rem; text-decoration:none;
+    transition:transform .16s ease, box-shadow .16s ease, background .16s ease;
+  }
+  .btn-primary{background:var(--amber); color:#fff; box-shadow:var(--shadow-sm);}
+  .btn-primary:hover{background:var(--amber-deep); transform:translateY(-2px); box-shadow:0 10px 22px -8px rgba(183,72,13,0.55);}
+  .btn-ghost{background:transparent; color:var(--ink); border:1.5px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--ink); transform:translateY(-2px);}
+  .btn-sm{padding:0.55rem 1.05rem; font-size:0.8rem;}
+  .nav-cta{display:none;}
+  @media (min-width:900px){ .nav-cta{display:inline-flex;} }
+
+  /* ---------- hero ---------- */
+  .hero{padding:4.5rem 0 5rem; position:relative; overflow:hidden;}
+  .hero-grid{display:grid; grid-template-columns:1.05fr 0.95fr; gap:3.5rem; align-items:center;}
+  @media (max-width:960px){ .hero-grid{grid-template-columns:1fr;} }
+
+  .hero h1{
+    font-family:var(--font-display); font-weight:600; font-size:clamp(2.6rem, 5.2vw, 4.1rem);
+    line-height:1.04; letter-spacing:-0.015em; margin:0.9rem 0 1.3rem;
+  }
+  .hero h1 em{font-style:italic; color:var(--amber-deep); font-weight:500;}
+  .hero p.lede{font-size:1.08rem; line-height:1.62; color:var(--ink-soft); max-width:34rem; margin:0 0 2rem;}
+  .hero-ctas{display:flex; flex-wrap:wrap; gap:0.85rem; margin-bottom:1.6rem;}
+  .hero-meta{display:flex; flex-wrap:wrap; gap:1.4rem; font-family:var(--font-mono); font-size:0.74rem; color:var(--ink-soft);}
+  .hero-meta span{display:flex; align-items:center; gap:0.4rem;}
+  .dot{width:6px; height:6px; border-radius:50%; background:var(--teal); display:inline-block;}
+
+  /* evidence board visual */
+  .board{position:relative; min-height:26rem;}
+  .card{
+    position:absolute; background:var(--paper); border:1px solid var(--line);
+    border-radius:8px; box-shadow:var(--shadow-card); padding:1rem 1.1rem;
+  }
+  .card .tag{font-family:var(--font-mono); font-size:0.62rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--amber-deep); font-weight:600; margin-bottom:0.35rem; display:block;}
+  .card h4{font-family:var(--font-display); font-size:1.02rem; margin:0 0 0.3rem; font-weight:600;}
+  .card p{font-size:0.78rem; color:var(--ink-soft); margin:0; line-height:1.45;}
+  .pin{
+    position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+    width:14px; height:14px; border-radius:50%; background:var(--red-pin);
+    box-shadow:0 3px 6px rgba(0,0,0,0.35), inset 0 -2px 2px rgba(0,0,0,0.25);
+  }
+  .card-1{top:0; left:2%; width:15rem; transform:rotate(-4deg); z-index:3;}
+  .card-2{top:14%; right:0; width:13.5rem; transform:rotate(3deg); z-index:2;}
+  .card-3{bottom:3%; left:14%; width:14.5rem; transform:rotate(2deg); z-index:4;}
+  .card-4{bottom:16%; right:8%; width:11rem; transform:rotate(-5deg); z-index:1; background:var(--teal-pale); border-color:var(--teal);}
+  .card-4 .tag{color:var(--teal-deep);}
+  .thread{position:absolute; z-index:0; opacity:0.55; pointer-events:none;}
+  .washi{
+    position:absolute; width:3.4rem; height:1.1rem; top:-0.5rem; left:50%; transform:translateX(-50%) rotate(-2deg);
+    background:repeating-linear-gradient(45deg, var(--amber-pale), var(--amber-pale) 4px, #f0c99c 4px, #f0c99c 8px);
+    opacity:0.85; border-radius:2px;
+  }
+
+  /* ---------- section shell ---------- */
+  section{padding:5rem 0; position:relative;}
+  .section-head{max-width:38rem; margin-bottom:3rem;}
+  .section-head h2{font-family:var(--font-display); font-size:clamp(1.9rem, 3.2vw, 2.5rem); font-weight:600; letter-spacing:-0.01em; margin:0.6rem 0 0.9rem; line-height:1.12;}
+  .section-head p{color:var(--ink-soft); font-size:1rem; line-height:1.6; margin:0;}
+  .divider{border:none; border-top:1px solid var(--line);}
+
+  /* ---------- how it works: investigation stages ---------- */
+  .stages{display:grid; grid-template-columns:repeat(4,1fr); gap:1.4rem;}
+  @media (max-width:900px){ .stages{grid-template-columns:1fr 1fr;} }
+  @media (max-width:560px){ .stages{grid-template-columns:1fr;} }
+  .stage-card{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--radius);
+    padding:1.6rem 1.4rem; position:relative;
+    transition:transform .2s ease, box-shadow .2s ease;
+  }
+  .stage-card:hover{transform:translateY(-5px) rotate(-0.4deg); box-shadow:var(--shadow-card);}
+  .stage-num{font-family:var(--font-mono); font-size:0.72rem; color:var(--amber-deep); font-weight:600; letter-spacing:0.08em;}
+  .stage-card h3{font-family:var(--font-display); font-size:1.18rem; margin:0.6rem 0 0.5rem; font-weight:600;}
+  .stage-card p{font-size:0.87rem; color:var(--ink-soft); line-height:1.55; margin:0;}
+  .stage-icon{font-size:1.5rem; margin-bottom:0.4rem; display:block;}
+
+  /* ---------- cases dossier ---------- */
+  .dossier-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:1.3rem;}
+  @media (max-width:880px){ .dossier-grid{grid-template-columns:1fr 1fr;} }
+  @media (max-width:600px){ .dossier-grid{grid-template-columns:1fr;} }
+  .folder{
+    background:var(--paper); border:1px solid var(--line); border-radius:10px;
+    overflow:hidden; box-shadow:var(--shadow-sm); transition:transform .2s ease, box-shadow .2s ease;
+  }
+  .folder-live{cursor:pointer;}
+  .folder-live:hover{transform:translateY(-4px); box-shadow:var(--shadow-card); border-color:var(--amber);}
+  .folder-live .folder-tab{background:var(--amber-deep);}
+  .folder-live .status-live{position:relative;}
+  .folder-locked{opacity:0.62; cursor:not-allowed;}
+  .folder-locked:hover{transform:none; box-shadow:var(--shadow-sm);}
+  .folder-tab{
+    background:var(--ink); color:var(--cream); font-family:var(--font-mono); font-size:0.68rem;
+    letter-spacing:0.08em; text-transform:uppercase; padding:0.5rem 1rem; font-weight:600;
+  }
+  .folder-body{padding:1.25rem 1.3rem 1.4rem;}
+  .folder-body h4{font-family:var(--font-display); font-size:1.15rem; margin:0 0 0.35rem; font-weight:600;}
+  .folder-body p{font-size:0.85rem; color:var(--ink-soft); line-height:1.55; margin:0 0 0.9rem;}
+  .status-pill{
+    display:inline-flex; align-items:center; gap:0.35rem; font-family:var(--font-mono); font-size:0.68rem;
+    padding:0.28rem 0.6rem; border-radius:999px; font-weight:600; letter-spacing:0.03em;
+  }
+  .status-locked{background:var(--amber-pale); color:var(--amber-deep);}
+  .status-live{background:var(--teal-pale); color:var(--teal-deep);}
+
+  /* ---------- teacher band ---------- */
+  .teacher-band{background:var(--ink); color:var(--cream); border-radius:20px; padding:3rem 2.5rem; position:relative; overflow:hidden;}
+  .teacher-band::after{
+    content:""; position:absolute; right:-4rem; top:-4rem; width:16rem; height:16rem; border-radius:50%;
+    background:radial-gradient(circle, rgba(226,102,28,0.35), transparent 70%);
+  }
+  .teacher-grid{display:grid; grid-template-columns:1.1fr 0.9fr; gap:2.5rem; align-items:center; position:relative; z-index:1;}
+  @media (max-width:860px){ .teacher-grid{grid-template-columns:1fr;} }
+  .teacher-band h2{font-family:var(--font-display); font-size:1.9rem; font-weight:600; margin:0.6rem 0 1rem; line-height:1.15;}
+  .teacher-band p{color:#D8CDBB; font-size:0.98rem; line-height:1.6; margin:0 0 1.6rem;}
+  .teacher-band .eyebrow{color:var(--amber-pale);}
+  .check-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:0.75rem;}
+  .check-list li{display:flex; gap:0.65rem; align-items:flex-start; font-size:0.88rem; color:#EDE6D8;}
+  .check-list li::before{content:"✓"; color:var(--amber); font-weight:700; flex-shrink:0;}
+
+  /* ---------- final CTA ---------- */
+  .final-cta{text-align:center; padding-top:2rem;}
+  .final-cta h2{font-family:var(--font-display); font-size:clamp(2.1rem,4vw,3rem); font-weight:600; margin:0.7rem 0 1.1rem; letter-spacing:-0.01em;}
+  .final-cta p{color:var(--ink-soft); max-width:32rem; margin:0 auto 1.8rem; font-size:1rem; line-height:1.6;}
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--line); padding:2.6rem 0; margin-top:1rem;}
+  .foot-row{display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between;}
+  .foot-note{font-size:0.78rem; color:var(--ink-soft); font-family:var(--font-mono);}
+
+  /* scroll reveal — progressive enhancement: só esconde se o JS confirmar que está pronto,
+     assim o conteúdo nunca fica invisível caso o JS demore ou falhe */
+  .reveal{opacity:1; transform:none;}
+  html.js .reveal{opacity:0; transform:translateY(16px); transition:opacity .6s ease, transform .6s ease;}
+  html.js .reveal.in{opacity:1; transform:translateY(0);}
+</style>
+</head>
+<body>
+<script>document.documentElement.classList.add("js");</script>
+
+<header class="nav">
+  <div class="wrap nav-row">
+    <a class="wordmark" href="#topo" onclick="return goTo(event,'topo')"><span class="mark">EC</span>Enigma do Cuidado</a>
+    <nav class="links">
+      <a href="#como-funciona" onclick="return goTo(event,'como-funciona')">Como funciona</a>
+      <a href="#casos" onclick="return goTo(event,'casos')">Casos</a>
+      <a href="#professoras" onclick="return goTo(event,'professoras')">Para professoras</a>
+    </nav>
+    <a class="btn btn-primary btn-sm nav-cta" href="#casos" onclick="return goTo(event,'casos')">Iniciar investigação →</a>
+  </div>
+</header>
+
+<main id="topo">
+
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow">Plataforma de simulação clínica · Enfermagem</span>
+        <h1>Toda visita<br>domiciliar esconde<br><em>um enigma.</em></h1>
+        <p class="lede">Enigma do Cuidado é uma plataforma de casos simulados para o cuidado da pessoa idosa. Você entra na casa, observa o ambiente, conversa com o paciente e junta pistas — a resposta nunca é dada, só encontrada.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary" href="#casos" onclick="return goTo(event,'casos')">🔎 Iniciar investigação</a>
+          <a class="btn btn-ghost" href="#como-funciona" onclick="return goTo(event,'como-funciona')">Como funciona</a>
+        </div>
+        <div class="hero-meta">
+          <span><span class="dot"></span>Baseado na Caderneta da Pessoa Idosa</span>
+          <span><span class="dot" style="background:var(--amber);"></span>IVCF-20 · AMPI · anamnese</span>
+        </div>
+      </div>
+
+      <div class="board" aria-hidden="true">
+        <div class="card card-1">
+          <div class="washi"></div>
+          <span class="tag">Caso 01 · Cardiovascular</span>
+          <h4>Dona Maria Aparecida, 81 anos</h4>
+          <p>Mora sozinha. Pressão alterada, medicação irregular.</p>
+        </div>
+        <div class="card card-2">
+          <div class="pin"></div>
+          <span class="tag">Pista registrada</span>
+          <h4>Cartela de comprimidos</h4>
+          <p>Sem identificação — dificuldade para diferenciar remédios.</p>
+        </div>
+        <div class="card card-3">
+          <div class="pin"></div>
+          <span class="tag">Achado</span>
+          <h4>Óculos quebrados</h4>
+          <p>Baixa visão não corrigida há meses.</p>
+        </div>
+        <div class="card card-4">
+          <span class="tag">IVCF-20</span>
+          <h4 style="font-size:0.95rem;">Risco moderado</h4>
+          <p>Reaplicar em 6 meses.</p>
+        </div>
+        <svg class="thread" width="100%" height="100%" viewBox="0 0 400 400" style="position:absolute; inset:0;">
+          <path d="M 90 60 C 180 120, 220 90, 300 130" stroke="#B7480D" stroke-width="1.5" fill="none" stroke-dasharray="4 5"/>
+          <path d="M 120 180 C 160 220, 230 240, 280 260" stroke="#1F6F63" stroke-width="1.5" fill="none" stroke-dasharray="4 5"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider wrap">
+
+  <!-- ================= COMO FUNCIONA ================= -->
+  <section id="como-funciona">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow">Método de investigação</span>
+        <h2>Você não recebe respostas. Você as encontra.</h2>
+        <p>Cada caso é uma cena real de cuidado: uma casa, uma pessoa idosa, uma queixa. Nada é entregue pronto — o raciocínio clínico nasce da sua investigação, etapa por etapa.</p>
+      </div>
+      <div class="stages">
+        <div class="stage-card reveal">
+          <span class="stage-icon">🏠</span>
+          <span class="stage-num">Etapa 01</span>
+          <h3>Observe a cena</h3>
+          <p>Explore o ambiente domiciliar. Cada objeto investigado revela uma pista sobre a rotina e a saúde da pessoa.</p>
+        </div>
+        <div class="stage-card reveal">
+          <span class="stage-icon">💬</span>
+          <span class="stage-num">Etapa 02</span>
+          <h3>Converse com o paciente</h3>
+          <p>Faça perguntas livres. A entrevista responde só o que o paciente sabe — sem entregar diagnóstico algum.</p>
+        </div>
+        <div class="stage-card reveal">
+          <span class="stage-icon">📓</span>
+          <span class="stage-num">Etapa 03</span>
+          <h3>Registre na caderneta</h3>
+          <p>Preencha a Caderneta da Pessoa Idosa com os achados: avaliação clínica, IVCF-20, riscos e suporte familiar.</p>
+        </div>
+        <div class="stage-card reveal">
+          <span class="stage-icon">🧩</span>
+          <span class="stage-num">Etapa 04</span>
+          <h3>Conclua o caso</h3>
+          <p>Aponte os 3 principais problemas, proponha cuidados de enfermagem e identifique o que ficou por avaliar.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CASOS ================= -->
+  <section id="casos">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow">Dossiê de casos</span>
+        <h2>Seis famílias. Seis enigmas do cuidado.</h2>
+        <p>Cada caso investiga um eixo diferente da saúde da pessoa idosa — do sistema cardiovascular à vulnerabilidade social.</p>
+      </div>
+      <div class="dossier-grid">
+        <a class="folder folder-live reveal" href="investigacao-domiciliar-dona-maria.html" style="text-decoration:none; color:inherit; display:block;">
+          <div class="folder-tab">Caso 01 · Cardiovascular</div>
+          <div class="folder-body">
+            <h4>Dona Maria Aparecida</h4>
+            <p>81 anos, hipertensa, uso irregular de medicação, baixa visão e audição reduzida.</p>
+            <span class="status-pill status-live">🔑 pedir senha com a professora →</span>
+          </div>
+        </a>
+        <a class="folder folder-live reveal" href="caso-2-seu-joao.html" style="text-decoration:none; color:inherit; display:block;">
+          <div class="folder-tab">Caso 02 · Osteomuscular</div>
+          <div class="folder-body">
+            <h4>Seu João</h4>
+            <p>79 anos, dor lombar crônica, uso inadequado de bengala, situação vacinal desconhecida.</p>
+            <span class="status-pill status-live">🔑 pedir senha com a professora →</span>
+          </div>
+        </a>
+        <a class="folder folder-live reveal" href="caso-3-dona-tereza.html" style="text-decoration:none; color:inherit; display:block;">
+          <div class="folder-tab">Caso 03 · Atividade física</div>
+          <div class="folder-body">
+            <h4>Dona Tereza</h4>
+            <p>84 anos, medo de cair após queda, fraqueza muscular, perda de peso recente.</p>
+            <span class="status-pill status-live">🔑 pedir senha com a professora →</span>
+          </div>
+        </a>
+        <a class="folder folder-live reveal" href="caso-4-seu-antonio.html" style="text-decoration:none; color:inherit; display:block;">
+          <div class="folder-tab">Caso 04 · Nutrição</div>
+          <div class="folder-body">
+            <h4>Seu Antônio</h4>
+            <p>76 anos, diabético insulinodependente, dificuldade visual para aplicar insulina.</p>
+            <span class="status-pill status-live">🔑 pedir senha com a professora →</span>
+          </div>
+        </a>
+        <a class="folder folder-live reveal" href="caso-5-dona-lourdes.html" style="text-decoration:none; color:inherit; display:block;">
+          <div class="folder-tab">Caso 05 · Sono</div>
+          <div class="folder-body">
+            <h4>Dona Lourdes</h4>
+            <p>82 anos, insônia, isolamento social, tropeços noturnos por dificuldade visual.</p>
+            <span class="status-pill status-live">🔑 pedir senha com a professora →</span>
+          </div>
+        </a>
+        <a class="folder folder-live reveal" href="caso-6-seu-jose.html" style="text-decoration:none; color:inherit; display:block;">
+          <div class="folder-tab">Caso 06 · Vulnerabilidade social</div>
+          <div class="folder-body">
+            <h4>Seu José</h4>
+            <p>85 anos, sinais de negligência, receita vencida, hematomas não explicados.</p>
+            <span class="status-pill status-live">🔑 pedir senha com a professora →</span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PROFESSORAS ================= -->
+  <section id="professoras">
+    <div class="wrap">
+      <div class="teacher-band reveal">
+        <div class="teacher-grid">
+          <div>
+            <span class="eyebrow">Para a equipe docente</span>
+            <h2>Cada caso tem um painel só da professora.</h2>
+            <p>Acesso por senha, independente da senha dos alunos — pensado para dar controle total sobre a atividade em sala, sem depender de internet estável ou de uma IA sempre disponível.</p>
+            <a class="btn btn-primary" href="investigacao-domiciliar-dona-maria.html?painel=professora">Acessar painel da professora</a>
+          </div>
+          <ul class="check-list">
+            <li>Habilita perguntas prontas no chat caso a IA da entrevista pare de funcionar</li>
+            <li>Acompanha pistas, perguntas e envios feitos em cada dispositivo</li>
+            <li>Reinicia a simulação entre grupos, sem apagar respostas já enviadas</li>
+            <li>Manual de instruções completo, sempre a um clique</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CTA FINAL ================= -->
+  <section class="final-cta">
+    <div class="wrap">
+      <span class="stamp">Investigação em andamento</span>
+      <h2>O enigma está montado.<br>Falta só alguém pra investigar.</h2>
+      <p>Peça a senha do caso com a sua professora e comece a visita.</p>
+      <a class="btn btn-primary" href="#casos" onclick="return goTo(event,'casos')">🔎 Iniciar investigação →</a>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <a class="wordmark" href="#topo" style="font-size:1.05rem;" onclick="return goTo(event,'topo')"><span class="mark" style="width:1.6rem; height:1.6rem; font-size:0.72rem;">EC</span>Enigma do Cuidado</a>
+    <span class="foot-note">Núcleo de Simulação Clínica · Enfermagem — material didático, uso educacional.</span>
+  </div>
+</footer>
+
+<script>
+  // Links internos usam JS em vez de navegação por href puro — necessário porque
+  // o preview de artifacts do Claude intercepta cliques em âncoras (#id) como se
+  // fossem links externos. Com preventDefault + scrollIntoView funciona igual
+  // dentro do Claude e depois de publicado (GitHub Pages etc).
+  function goTo(event, id){
+    event.preventDefault();
+    const el = document.getElementById(id);
+    if(el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    return false;
+  }
+
+  const revealEls = document.querySelectorAll(".reveal");
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } });
+  }, { threshold: 0.15 });
+  revealEls.forEach(el=>io.observe(el));
+</script>
+
+</body>
+</html>
