@@ -62,12 +62,16 @@
   #teacherLockScreen{z-index:10000;}
 
   /* cena isométrica */
-  .scene-wrap{position:relative; width:100%; border-radius:18px; overflow:hidden; border:1px solid var(--line); margin:1rem 0; background:radial-gradient(ellipse at 50% 15%, var(--cream-deep), var(--cream) 70%); padding:0.6rem;}
-  .scene-wrap svg{width:100%; display:block;}
-  .iso-item{cursor:pointer; transition:filter .15s ease;}
-  .iso-item:hover{filter:brightness(1.14) drop-shadow(0 0 8px rgba(226,102,28,0.55));}
-  .iso-item.found{filter:saturate(0.55);}
-  .iso-item:focus-visible{outline:3px solid var(--teal); outline-offset:2px;}
+  .scene-wrap{position:relative; width:100%; border-radius:18px; overflow:hidden; border:1px solid var(--line); margin:1rem 0; background:var(--ink); box-shadow:var(--shadow-card);}
+  .scene-wrap img{width:100%; display:block;}
+  #hotspotLayer{position:absolute; inset:0;}
+  .hotspot-marker{position:absolute; width:46px; height:46px; margin-left:-23px; margin-top:-23px; border-radius:50%;
+    background:rgba(255,253,249,0.94); border:3px solid var(--amber); display:flex; align-items:center; justify-content:center;
+    font-size:1.35rem; cursor:pointer; box-shadow:0 3px 10px rgba(36,26,16,0.4); animation:iso-pulse 2.2s infinite;}
+  .hotspot-marker:hover{transform:scale(1.08); filter:brightness(1.05);}
+  .hotspot-marker:focus-visible{outline:3px solid var(--teal); outline-offset:2px;}
+  .hotspot-marker.found{border-color:var(--teal); background:rgba(220,239,234,0.96); animation:none;}
+  @keyframes iso-pulse{0%{box-shadow:0 0 0 0 rgba(226,102,28,0.5), 0 3px 10px rgba(36,26,16,0.4);} 70%{box-shadow:0 0 0 14px rgba(226,102,28,0), 0 3px 10px rgba(36,26,16,0.4);} 100%{box-shadow:0 0 0 0 rgba(226,102,28,0), 0 3px 10px rgba(36,26,16,0.4);}}
   .scene-hint{font-family:var(--font-mono); font-size:0.72rem; color:var(--ink-soft); text-align:center; margin:0.3rem 0 0.9rem;}
 
   .hotspot-list{display:flex; flex-wrap:wrap; gap:0.5rem; margin:0.9rem 0;}
@@ -161,8 +165,11 @@
     <button class="btn btn-ghost btn-sm" onclick="openModal('modalChat')">💬 Conversar com Dona Maria</button>
   </div>
 
-  <div class="scene-wrap" id="sceneWrap"></div>
-  <p class="scene-hint">Passe o mouse ou o toque pelos móveis e objetos da casa — clique nos que parecerem relevantes.</p>
+  <div class="scene-wrap">
+    <img src="caso-1-cena.jpg" alt="Cena da visita domiciliar — Dona Maria Aparecida">
+    <div id="hotspotLayer"></div>
+  </div>
+  <p class="scene-hint">Passe o mouse ou o toque pela foto da cena — clique nos pontos destacados.</p>
   <div class="hotspot-list" id="hotspotList"></div>
 
   <div class="footer-nav">
@@ -254,260 +261,12 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/* ===================== ISOROOM (gerador de cena isométrica) ===================== */
-/* ===================== ISOROOM — gerador de cena isométrica estilo "casinha" =====================
-   Projeção isométrica 2:1. Cada objeto é desenhado como uma caixa com 3 faces sombreadas
-   (topo claro, lateral direita média, lateral esquerda escura) + um ícone centralizado no topo.
-   Uso: isoRoomSVG({ cols, rows, wallHeight, floorColor, wallColor, items, hotspotState, onClickAttr })
-*/
-(function(global){
-
-  function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
-
-  function hexToHsl(hex){
-    hex = hex.replace('#','');
-    const r = parseInt(hex.substr(0,2),16)/255, g = parseInt(hex.substr(2,2),16)/255, b = parseInt(hex.substr(4,2),16)/255;
-    const max = Math.max(r,g,b), min = Math.min(r,g,b);
-    let h,s,l = (max+min)/2;
-    if(max===min){ h=s=0; }
-    else{
-      const d = max-min;
-      s = l>0.5 ? d/(2-max-min) : d/(max+min);
-      switch(max){
-        case r: h = (g-b)/d + (g<b?6:0); break;
-        case g: h = (b-r)/d + 2; break;
-        case b: h = (r-g)/d + 4; break;
-      }
-      h/=6;
-    }
-    return [h*360, s*100, l*100];
-  }
-  function hslToHex(h,s,l){
-    h/=360; s/=100; l/=100;
-    let r,g,b;
-    if(s===0){ r=g=b=l; }
-    else{
-      const hue2rgb=(p,q,t)=>{ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; };
-      const q = l<0.5 ? l*(1+s) : l+s-l*s;
-      const p = 2*l-q;
-      r = hue2rgb(p,q,h+1/3); g = hue2rgb(p,q,h); b = hue2rgb(p,q,h-1/3);
-    }
-    const toHex = x => Math.round(clamp(x*255,0,255)).toString(16).padStart(2,'0');
-    return '#'+toHex(r)+toHex(g)+toHex(b);
-  }
-  function shade(hex, dl){ // dl: delta lightness in percentage points, +lighter -darker
-    const [h,s,l] = hexToHsl(hex);
-    return hslToHex(h, s, clamp(l+dl, 2, 97));
-  }
-
-  function proj(gx, gy, gz, tileW, tileH, originX, originY, heightPx){
-    const x = originX + (gx - gy) * (tileW/2);
-    const y = originY + (gx + gy) * (tileH/2) - (gz * heightPx);
-    return [x,y];
-  }
-
-  function pathFrom(pts){
-    return 'M ' + pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L ') + ' Z';
-  }
-
-  /*
-    items: [{
-      id, gx, gy, w, d, h,       // posição/tamanho em "tiles" (h em unidades verticais, px via heightUnitPx)
-      color,                       // cor base
-      icon,                        // emoji exibido no topo
-      label,                       // rótulo (title/acessibilidade)
-      flat (opcional bool)         // true = desenha só um "tapete" fino (ex: tapete, mancha) em vez de caixa
-      found (opcional bool)        // já investigado?
-      onClick (string JS opcional) // atributo onclick customizado; senão usa data-hotspot + listener externo
-    }]
-  */
-  function isoRoomSVG(opts){
-    const cols = opts.cols || 6;
-    const rows = opts.rows || 6;
-    const tileW = opts.tileW || 96;
-    const tileH = tileW/2;
-    const heightUnitPx = opts.heightUnitPx || 34;
-    const wallHeightUnits = opts.wallHeight || 4;
-    const pad = 60;
-    const originX = pad + rows*tileW/2; // leftmost point of floor diamond sits near x=pad
-    const originY = pad + 10;
-    const floorColor = opts.floorColor || '#C9A876';
-    const wallColorBack = opts.wallColorBack || opts.wallColor || '#E7D9BE';
-    const wallColorSide = opts.wallColorSide || shade(wallColorBack, -8);
-
-    const svgW = pad*2 + (cols+rows)*tileW/2;
-    const svgH = pad*2 + (cols+rows)*tileH/2 + wallHeightUnits*heightUnitPx + 40;
-
-    let defs = `
-      <defs>
-        <linearGradient id="wallGradBack" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${shade(wallColorBack,6)}"/>
-          <stop offset="100%" stop-color="${shade(wallColorBack,-10)}"/>
-        </linearGradient>
-        <linearGradient id="wallGradSide" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${shade(wallColorSide,6)}"/>
-          <stop offset="100%" stop-color="${shade(wallColorSide,-10)}"/>
-        </linearGradient>
-      </defs>`;
-    let parts = [];
-
-    // ---------- paredes (fundo) ----------
-    // Parede de fundo esquerda: aresta gy=0, gx de 0..cols, subindo wallHeightUnits
-    {
-      const A = proj(0,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const B = proj(cols,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const At = proj(0,0,wallHeightUnits,tileW,tileH,originX,originY,heightUnitPx);
-      const Bt = proj(cols,0,wallHeightUnits,tileW,tileH,originX,originY,heightUnitPx);
-      parts.push(`<path d="${pathFrom([A,B,Bt,At])}" fill="url(#wallGradBack)" />`);
-    }
-    // Parede de fundo direita: aresta gx=0, gy de 0..rows
-    {
-      const A = proj(0,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const D = proj(0,rows,0,tileW,tileH,originX,originY,heightUnitPx);
-      const At = proj(0,0,wallHeightUnits,tileW,tileH,originX,originY,heightUnitPx);
-      const Dt = proj(0,rows,wallHeightUnits,tileW,tileH,originX,originY,heightUnitPx);
-      parts.push(`<path d="${pathFrom([A,D,Dt,At])}" fill="url(#wallGradSide)" />`);
-    }
-    // rodapé sutil nas paredes
-    {
-      const A = proj(0,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const B = proj(cols,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const Askirt = proj(0,0,0.5,tileW,tileH,originX,originY,heightUnitPx);
-      const Bskirt = proj(cols,0,0.5,tileW,tileH,originX,originY,heightUnitPx);
-      parts.push(`<path d="${pathFrom([A,B,Bskirt,Askirt])}" fill="${shade(wallColorBack,-14)}" opacity="0.55"/>`);
-    }
-
-    // ---------- piso ----------
-    {
-      const A = proj(0,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const B = proj(cols,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const C = proj(cols,rows,0,tileW,tileH,originX,originY,heightUnitPx);
-      const D = proj(0,rows,0,tileW,tileH,originX,originY,heightUnitPx);
-      parts.push(`<path d="${pathFrom([A,B,C,D])}" fill="${floorColor}" stroke="${shade(floorColor,-10)}" stroke-width="1"/>`);
-      // linhas de tábua sutis (ripas do piso)
-      let planks = '';
-      for(let i=1;i<cols;i++){
-        const p1 = proj(i,0,0,tileW,tileH,originX,originY,heightUnitPx);
-        const p2 = proj(i,rows,0,tileW,tileH,originX,originY,heightUnitPx);
-        planks += `<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p2[0].toFixed(1)}" y2="${p2[1].toFixed(1)}" stroke="${shade(floorColor,-6)}" stroke-width="1" opacity="0.4"/>`;
-      }
-      parts.push(`<g>${planks}</g>`);
-    }
-
-    // ---------- itens (ordenados por profundidade: gx+gy crescente desenha por último = na frente) ----------
-    const items = (opts.items||[]).slice().sort((a,b)=> (a.gx+a.gy) - (b.gx+b.gy));
-    const hotArea = [];
-
-    items.forEach(it=>{
-      const found = !!it.found;
-      const baseColor = found ? shade(it.color, 10) : it.color;
-      const w = it.w||1, d = it.d||1, h = it.h||1;
-      const gx=it.gx, gy=it.gy;
-
-      if(it.type === 'stairs'){
-        const steps = it.steps || 4;
-        const stepDepth = d/steps;
-        let g = `<g class="iso-item${found?' found':''}" data-hotspot="${it.id}" tabindex="0" role="button" aria-label="${(it.label||'').replace(/"/g,'&quot;')}">`;
-        for(let s=0; s<steps; s++){
-          const sgy = gy + s*stepDepth;
-          const sh = h * ((s+1)/steps);
-          const A2 = proj(gx,sgy,0,tileW,tileH,originX,originY,heightUnitPx);
-          const B2 = proj(gx+w,sgy,0,tileW,tileH,originX,originY,heightUnitPx);
-          const C2 = proj(gx+w,sgy+stepDepth,0,tileW,tileH,originX,originY,heightUnitPx);
-          const D2 = proj(gx,sgy+stepDepth,0,tileW,tileH,originX,originY,heightUnitPx);
-          const At2 = proj(gx,sgy,sh,tileW,tileH,originX,originY,heightUnitPx);
-          const Bt2 = proj(gx+w,sgy,sh,tileW,tileH,originX,originY,heightUnitPx);
-          const Ct2 = proj(gx+w,sgy+stepDepth,sh,tileW,tileH,originX,originY,heightUnitPx);
-          const Dt2 = proj(gx,sgy+stepDepth,sh,tileW,tileH,originX,originY,heightUnitPx);
-          const topC = shade(baseColor, 14), rightC = shade(baseColor,-4), leftC = shade(baseColor,-20);
-          g += `<path d="${pathFrom([D2,C2,Ct2,Dt2])}" fill="${leftC}"/>`;
-          g += `<path d="${pathFrom([B2,C2,Ct2,Bt2])}" fill="${rightC}"/>`;
-          g += `<path d="${pathFrom([At2,Bt2,Ct2,Dt2])}" fill="${topC}" stroke="${shade(baseColor,-25)}" stroke-width="0.6"/>`;
-        }
-        const topMid = proj(gx+w/2, gy+d/2, h, tileW,tileH,originX,originY,heightUnitPx);
-        if(it.icon) g += `<text x="${topMid[0].toFixed(1)}" y="${(topMid[1]-6).toFixed(1)}" font-size="24" text-anchor="middle" style="filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))">${it.icon}</text>`;
-        g += `</g>`;
-        parts.push(g);
-        return;
-      }
-
-      if(it.flat){
-        // "tapete"/mancha fina no chão, ou sobre uma superfície (it.z define a altura)
-        const fz = (it.z!==undefined ? it.z : 0.02);
-        const A = proj(gx,gy,fz,tileW,tileH,originX,originY,heightUnitPx);
-        const B = proj(gx+w,gy,fz,tileW,tileH,originX,originY,heightUnitPx);
-        const C = proj(gx+w,gy+d,fz,tileW,tileH,originX,originY,heightUnitPx);
-        const D = proj(gx,gy+d,fz,tileW,tileH,originX,originY,heightUnitPx);
-        const cx=(A[0]+B[0]+C[0]+D[0])/4, cy=(A[1]+B[1]+C[1]+D[1])/4;
-        const isDecoFlat = !!it.deco;
-        const groupAttrsFlat = isDecoFlat
-          ? `class="iso-deco" style="pointer-events:none;"`
-          : `class="iso-item${found?' found':''}" data-hotspot="${it.id}" tabindex="0" role="button" aria-label="${(it.label||'').replace(/"/g,'&quot;')}"`;
-        parts.push(`<g ${groupAttrsFlat}>
-          <path d="${pathFrom([A,B,C,D])}" fill="${baseColor}" stroke="${shade(baseColor,-18)}" stroke-width="1.2" opacity="0.92"/>
-          ${it.icon? `<text x="${cx.toFixed(1)}" y="${(cy+6).toFixed(1)}" font-size="22" text-anchor="middle">${it.icon}</text>`:''}
-        </g>`);
-        hotArea.push([cx,cy]);
-        return;
-      }
-
-      {
-        const fcx = originX + ((gx+w/2) - (gy+d/2)) * (tileW/2);
-        const fcy = originY + ((gx+w/2) + (gy+d/2)) * (tileH/2);
-        const rx = (w* (tileW/2))*0.62, ry = (d*(tileH/2))*0.62;
-        parts.push(`<ellipse cx="${fcx.toFixed(1)}" cy="${fcy.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="#000" opacity="0.16"/>`);
-      }
-      const A  = proj(gx,gy,0,tileW,tileH,originX,originY,heightUnitPx);
-      const B  = proj(gx+w,gy,0,tileW,tileH,originX,originY,heightUnitPx);
-      const C  = proj(gx+w,gy+d,0,tileW,tileH,originX,originY,heightUnitPx);
-      const D  = proj(gx,gy+d,0,tileW,tileH,originX,originY,heightUnitPx);
-      const At = proj(gx,gy,h,tileW,tileH,originX,originY,heightUnitPx);
-      const Bt = proj(gx+w,gy,h,tileW,tileH,originX,originY,heightUnitPx);
-      const Ct = proj(gx+w,gy+d,h,tileW,tileH,originX,originY,heightUnitPx);
-      const Dt = proj(gx,gy+d,h,tileW,tileH,originX,originY,heightUnitPx);
-
-      const topColor = shade(baseColor, 16);
-      const rightColor = shade(baseColor, -4);   // face B,C,Ct,Bt
-      const leftColor = shade(baseColor, -20);   // face D,C,Ct,Dt
-
-      const cx = (At[0]+Ct[0])/2, cy = (At[1]+Ct[1])/2;
-
-      // itens "deco" (ex: mesa, cama) são só cenário — não recebem clique e
-      // deixam o ponteiro atravessar para o que estiver por cima/atrás deles.
-      const isDeco = !!it.deco;
-      const groupAttrs = isDeco
-        ? `class="iso-deco" style="pointer-events:none;"`
-        : `class="iso-item${found?' found':''}" data-hotspot="${it.id}" tabindex="0" role="button" aria-label="${(it.label||'').replace(/"/g,'&quot;')}"`;
-
-      parts.push(`<g ${groupAttrs}>
-        <path d="${pathFrom([D,C,Ct,Dt])}" fill="${leftColor}"/>
-        <path d="${pathFrom([B,C,Ct,Bt])}" fill="${rightColor}"/>
-        <path d="${pathFrom([At,Bt,Ct,Dt])}" fill="${topColor}" stroke="${shade(baseColor,-25)}" stroke-width="0.6"/>
-        ${it.icon? `<text x="${cx.toFixed(1)}" y="${(cy+7).toFixed(1)}" font-size="26" text-anchor="middle" style="filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))">${it.icon}</text>`:''}
-      </g>`);
-      hotArea.push([cx,cy]);
-    });
-
-    const svg = `<svg viewBox="0 0 ${svgW.toFixed(0)} ${svgH.toFixed(0)}" xmlns="http://www.w3.org/2000/svg" width="100%" style="display:block;">
-      ${defs}
-      <g>${parts.join('\n')}</g>
-    </svg>`;
-    return svg;
-  }
-
-  global.isoRoomSVG = isoRoomSVG;
-  global.isoShade = shade;
-})(typeof window!=='undefined'?window:global);
-
-</script>
-<script>
 const TEACHER_PASSWORD = "professorenf2026";
 const CASE_PASSWORD = "enf2525";
 const PREFIX = "caso1_";
 const ACTIVITY_KEY = PREFIX + "activityLog";
 
-const CASE = {"name": "Dona Maria Aparecida", "age": 81, "hotspots": [{"id": "radio", "icon": "📻", "label": "Rádio", "clue": "O rádio está ligado, mas o volume está muito alto. Ao observar melhor, você percebe que Dona Maria parece ter dificuldade para acompanhar o que está sendo transmitido."}, {"id": "medicamentos", "icon": "💊", "label": "Medicamentos", "clue": "Há vários medicamentos sobre a mesa. Alguns estão fora das embalagens originais e há comprimidos diferentes próximos uns dos outros. Dona Maria diz: \"Eu tomo quando lembro. Às vezes não sei qual comprimido é qual.\""}, {"id": "oculos", "icon": "👓", "label": "Óculos e papéis", "clue": "Ao lado de alguns papéis, você encontra os óculos de leitura de Dona Maria, com uma das lentes riscada. Alguns documentos próximos têm anotações difíceis de entender."}, {"id": "pia", "icon": "🚰", "label": "Pia e louça", "clue": "A pia está com louça acumulada e a bancada, desorganizada — sinais de que as tarefas do dia a dia têm sido difíceis de manter sozinha. Dona Maria informa que não possui familiares próximos."}, {"id": "prescricoes", "icon": "📄", "label": "Prescrições e exames", "clue": "Ao consultar os papéis de prescrição e exames sobre a mesa, você percebe que não existem registros recentes — parecem ser de um bom tempo atrás."}], "problemsOptions": ["Hipertensão com controle inadequado", "Baixa adesão/dificuldade no uso dos medicamentos", "Baixa visão", "Diminuição da audição", "Tonturas", "Isolamento/ausência de suporte próximo", "Caderneta desatualizada", "Cefaleia"], "assessmentOptions": ["Verificação da pressão arterial", "Avaliação da visão", "Avaliação da audição", "Investigação do uso dos medicamentos", "Avaliação do risco de quedas", "Avaliação da capacidade funcional", "Avaliação do suporte familiar/social", "Avaliação da cognição", "Avaliação do ambiente domiciliar", "Avaliação nutricional", "Verificação da vacinação"], "missingAnswer": "Avaliação da audição", "vaccination": {"birthInfo": "81 anos", "cns": "•••• •••• 5214", "ubs": "UBS de referência não informada", "records": [{"vaccine": "Influenza (gripe)", "lastDose": "2024", "status": "Registrada — reforço anual pendente"}, {"vaccine": "COVID-19", "lastDose": "2021", "status": "Registro antigo — sem doses de reforço"}, {"vaccine": "Hepatite B", "lastDose": "—", "status": "Sem registro"}, {"vaccine": "dT (Dupla adulto)", "lastDose": "—", "status": "Sem registro"}, {"vaccine": "Pneumocócica 23-valente", "lastDose": "—", "status": "Sem registro"}]}, "personaSummary": "Mulher de 81 anos, viúva, simples, reservada, educada, um pouco desconfiada no início, orgulhosa da própria independência, carinhosa quando ganha confiança, às vezes teimosa, não gosta de admitir dificuldades e pode minimizar problemas.", "speechStyle": ["Ah, meu filho...", "Eu não sei explicar direito.", "Acho que foi esses dias.", "Quando eu lembro, eu tomo.", "Minha pressão anda meio alta.", "Eu fico meio tonta.", "Não estou enxergando direito esses dias.", "Perdi meus óculos.", "Esse rádio eu gosto de deixar ligado.", "Moro sozinha mesmo.", "Não tenho ninguém da família por perto."], "knownFacts": ["Tem pressão alta (\"a pressão vive alta\"), mas não usa o termo técnico \"hipertensão\" espontaneamente.", "Toma quatro remédios, mas não segue horário fixo — toma \"quando lembra\".", "Às vezes esquece os remédios porque se distrai; não sabe explicar bem o motivo.", "Sente tonturas frequentes, de intensidade e gatilho não definidos.", "Tem episódios de dor de cabeça (\"dor de cabeça\", nunca diz \"cefaleia\").", "Perdeu os óculos; baixa visão, principalmente para identificar comprimidos pequenos e ler.", "Diminuição da audição — ocasionalmente pede para repetir ou falar mais alto.", "Mora sozinha, é viúva, está na mesma casa há muitos anos, tem apego à casa.", "Não tem familiares próximos; às vezes cita uma vizinha que conversa com ela.", "Tem uma Caderneta da Pessoa Idosa, mas faz tempo que não mexe nela / sem registros recentes.", "O rádio fica ligado alto porque, se abaixar, ela quase não escuta.", "Há papéis, receitas e exames espalhados na mesa, que ela guarda \"para não perder\".", "Às vezes deixa louça acumulada na pia, \"para depois\"."], "sceneContext": "Você está sentada à mesa da cozinha, com a mão na testa por causa de uma leve dor de cabeça. O rádio está ligado, em volume alto. Há remédios, cartelas, papéis e uma caderneta sobre a mesa. Há louça acumulada na pia.", "patientResponses": [{"q": "A senhora sente tontura?", "a": "Sinto sim, de vez em quando tudo roda um pouco.", "kw": ["tontura", "tonta", "zonzo", "roda"]}, {"q": "A senhora sente dor de cabeça?", "a": "De vez em quando dá uma dor aqui na cabeça.", "kw": ["dor de cabeca", "cefaleia", "cabeca doi", "dor na cabeca"]}, {"q": "Como está sua pressão?", "a": "Ah, dizem que ela fica alta, viu. Não sei bem.", "kw": ["pressao", "hipertens"]}, {"q": "Como organiza seus medicamentos?", "a": "Eu tomo quando lembro... não tenho muito jeito com isso.", "kw": ["organiza", "remedio", "medicamento", "medicacao", "horario"]}, {"q": "A senhora consegue identificar todos os comprimidos?", "a": "Às vezes fico confusa, alguns são bem parecidos.", "kw": ["identificar", "comprimido", "confunde", "diferenciar"]}, {"q": "A senhora consegue enxergar bem?", "a": "Não enxergo muito bem não. Perdi os meus óculos certos.", "kw": ["enxergar", "visao", "ve bem", "oculos"]}, {"q": "A senhora escuta bem?", "a": "Hein? Fala mais alto, por favor, moça.", "kw": ["escuta", "ouve", "audicao", "surda"]}, {"q": "Quem mora com a senhora?", "a": "Moro sozinha, sim.", "kw": ["mora", "sozinha", "vive com", "quem mora"]}, {"q": "Quem ajuda a senhora quando precisa?", "a": "Não tenho ninguém por perto não.", "kw": ["ajuda", "apoio", "familia", "filho", "filha", "vizinh"]}, {"q": "Quando foi sua última atualização da Caderneta da Pessoa Idosa?", "a": "Ah, não lembro... faz tempo que não vejo essa caderneta.", "kw": ["caderneta", "registro", "atualiz"]}]};
-const ROOM = {"cols": 7, "rows": 6, "floorColor": "#D8C39C", "wallColorBack": "#EFE1C6", "items": [{"id": "mesa", "gx": 1.8, "gy": 3.0, "w": 2.0, "d": 1.4, "h": 0.75, "color": "#A9793F", "icon": "", "deco": true}, {"id": "radio", "gx": 5.3, "gy": 0.3, "w": 0.8, "d": 0.6, "h": 0.8, "color": "#B7480D", "icon": "📻"}, {"id": "medicamentos", "gx": 2.0, "gy": 3.2, "w": 1.4, "d": 0.9, "h": 0.1, "color": "#E2661C", "icon": "💊", "flat": true, "z": 0.75}, {"id": "oculos", "gx": 0.3, "gy": 4.3, "w": 0.8, "d": 0.6, "h": 0.1, "color": "#6B5B45", "icon": "👓", "flat": true}, {"id": "pia", "gx": 2.6, "gy": 0.3, "w": 1.6, "d": 1.0, "h": 1.1, "color": "#8FA7A3", "icon": "🚰"}, {"id": "prescricoes", "gx": 4.6, "gy": 4.3, "w": 0.9, "d": 0.7, "h": 0.1, "color": "#D9CBA3", "icon": "📄", "flat": true}]};
+const CASE = {"name": "Dona Maria Aparecida", "age": 81, "hotspots": [{"id": "radio", "icon": "📻", "top": 47, "left": 90, "label": "Rádio", "clue": "O rádio está ligado, mas o volume está muito alto. Ao observar melhor, você percebe que Dona Maria parece ter dificuldade para acompanhar o que está sendo transmitido."}, {"id": "medicamentos", "icon": "💊", "top": 72, "left": 43, "label": "Medicamentos", "clue": "Há vários medicamentos sobre a mesa. Alguns estão fora das embalagens originais e há comprimidos diferentes próximos uns dos outros. Dona Maria diz: \"Eu tomo quando lembro. Às vezes não sei qual comprimido é qual.\""}, {"id": "oculos", "icon": "👓", "top": 76, "left": 19, "label": "Óculos e papéis", "clue": "Ao lado de alguns papéis, você encontra os óculos de leitura de Dona Maria, com uma das lentes riscada. Alguns documentos próximos têm anotações difíceis de entender."}, {"id": "pia", "icon": "🚰", "top": 26, "left": 53, "label": "Pia e louça", "clue": "A pia está com louça acumulada e a bancada, desorganizada — sinais de que as tarefas do dia a dia têm sido difíceis de manter sozinha. Dona Maria informa que não possui familiares próximos."}, {"id": "prescricoes", "icon": "📄", "top": 79, "left": 83, "label": "Prescrições e exames", "clue": "Ao consultar os papéis de prescrição e exames sobre a mesa, você percebe que não existem registros recentes — parecem ser de um bom tempo atrás."}], "problemsOptions": ["Hipertensão com controle inadequado", "Baixa adesão/dificuldade no uso dos medicamentos", "Baixa visão", "Diminuição da audição", "Tonturas", "Isolamento/ausência de suporte próximo", "Caderneta desatualizada", "Cefaleia"], "assessmentOptions": ["Verificação da pressão arterial", "Avaliação da visão", "Avaliação da audição", "Investigação do uso dos medicamentos", "Avaliação do risco de quedas", "Avaliação da capacidade funcional", "Avaliação do suporte familiar/social", "Avaliação da cognição", "Avaliação do ambiente domiciliar", "Avaliação nutricional", "Verificação da vacinação"], "missingAnswer": "Avaliação da audição", "vaccination": {"birthInfo": "81 anos", "cns": "•••• •••• 5214", "ubs": "UBS de referência não informada", "records": [{"vaccine": "Influenza (gripe)", "lastDose": "2024", "status": "Registrada — reforço anual pendente"}, {"vaccine": "COVID-19", "lastDose": "2021", "status": "Registro antigo — sem doses de reforço"}, {"vaccine": "Hepatite B", "lastDose": "—", "status": "Sem registro"}, {"vaccine": "dT (Dupla adulto)", "lastDose": "—", "status": "Sem registro"}, {"vaccine": "Pneumocócica 23-valente", "lastDose": "—", "status": "Sem registro"}]}, "personaSummary": "Mulher de 81 anos, viúva, simples, reservada, educada, um pouco desconfiada no início, orgulhosa da própria independência, carinhosa quando ganha confiança, às vezes teimosa, não gosta de admitir dificuldades e pode minimizar problemas.", "speechStyle": ["Ah, meu filho...", "Eu não sei explicar direito.", "Acho que foi esses dias.", "Quando eu lembro, eu tomo.", "Minha pressão anda meio alta.", "Eu fico meio tonta.", "Não estou enxergando direito esses dias.", "Perdi meus óculos.", "Esse rádio eu gosto de deixar ligado.", "Moro sozinha mesmo.", "Não tenho ninguém da família por perto."], "knownFacts": ["Tem pressão alta (\"a pressão vive alta\"), mas não usa o termo técnico \"hipertensão\" espontaneamente.", "Toma quatro remédios, mas não segue horário fixo — toma \"quando lembra\".", "Às vezes esquece os remédios porque se distrai; não sabe explicar bem o motivo.", "Sente tonturas frequentes, de intensidade e gatilho não definidos.", "Tem episódios de dor de cabeça (\"dor de cabeça\", nunca diz \"cefaleia\").", "Perdeu os óculos; baixa visão, principalmente para identificar comprimidos pequenos e ler.", "Diminuição da audição — ocasionalmente pede para repetir ou falar mais alto.", "Mora sozinha, é viúva, está na mesma casa há muitos anos, tem apego à casa.", "Não tem familiares próximos; às vezes cita uma vizinha que conversa com ela.", "Tem uma Caderneta da Pessoa Idosa, mas faz tempo que não mexe nela / sem registros recentes.", "O rádio fica ligado alto porque, se abaixar, ela quase não escuta.", "Há papéis, receitas e exames espalhados na mesa, que ela guarda \"para não perder\".", "Às vezes deixa louça acumulada na pia, \"para depois\"."], "sceneContext": "Você está sentada à mesa da cozinha, com a mão na testa por causa de uma leve dor de cabeça. O rádio está ligado, em volume alto. Há remédios, cartelas, papéis e uma caderneta sobre a mesa. Há louça acumulada na pia.", "patientResponses": [{"q": "A senhora sente tontura?", "a": "Sinto sim, de vez em quando tudo roda um pouco.", "kw": ["tontura", "tonta", "zonzo", "roda"]}, {"q": "A senhora sente dor de cabeça?", "a": "De vez em quando dá uma dor aqui na cabeça.", "kw": ["dor de cabeca", "cefaleia", "cabeca doi", "dor na cabeca"]}, {"q": "Como está sua pressão?", "a": "Ah, dizem que ela fica alta, viu. Não sei bem.", "kw": ["pressao", "hipertens"]}, {"q": "Como organiza seus medicamentos?", "a": "Eu tomo quando lembro... não tenho muito jeito com isso.", "kw": ["organiza", "remedio", "medicamento", "medicacao", "horario"]}, {"q": "A senhora consegue identificar todos os comprimidos?", "a": "Às vezes fico confusa, alguns são bem parecidos.", "kw": ["identificar", "comprimido", "confunde", "diferenciar"]}, {"q": "A senhora consegue enxergar bem?", "a": "Não enxergo muito bem não. Perdi os meus óculos certos.", "kw": ["enxergar", "visao", "ve bem", "oculos"]}, {"q": "A senhora escuta bem?", "a": "Hein? Fala mais alto, por favor, moça.", "kw": ["escuta", "ouve", "audicao", "surda"]}, {"q": "Quem mora com a senhora?", "a": "Moro sozinha, sim.", "kw": ["mora", "sozinha", "vive com", "quem mora"]}, {"q": "Quem ajuda a senhora quando precisa?", "a": "Não tenho ninguém por perto não.", "kw": ["ajuda", "apoio", "familia", "filho", "filha", "vizinh"]}, {"q": "Quando foi sua última atualização da Caderneta da Pessoa Idosa?", "a": "Ah, não lembro... faz tempo que não vejo essa caderneta.", "kw": ["caderneta", "registro", "atualiz"]}]};
 
 let state = { found: new Set(), apiChatHistory: [], asked: 0 };
 
@@ -572,15 +331,24 @@ function logActivity(type, detail){
   localStorage.setItem(ACTIVITY_KEY, JSON.stringify(log));
 }
 
-/* ---------- CENA ISOMÉTRICA / HOTSPOTS ---------- */
+/* ---------- CENA (FOTO REAL) / HOTSPOTS ---------- */
 function renderScene(){
-  const wrap = document.getElementById('sceneWrap');
-  const itemsWithState = ROOM.items.map(it => ({...it, found: state.found.has(it.id)}));
-  wrap.innerHTML = isoRoomSVG({...ROOM, items: itemsWithState});
-  wrap.querySelectorAll('[data-hotspot]').forEach(el=>{
-    const id = el.getAttribute('data-hotspot');
-    el.addEventListener('click', ()=>openClue(id));
-    el.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openClue(id); } });
+  const layer = document.getElementById('hotspotLayer');
+  layer.innerHTML = '';
+  CASE.hotspots.forEach(h => {
+    const found = state.found.has(h.id);
+    const marker = document.createElement('div');
+    marker.className = 'hotspot-marker' + (found ? ' found' : '');
+    marker.style.top = h.top + '%';
+    marker.style.left = h.left + '%';
+    marker.textContent = h.icon;
+    marker.title = h.label;
+    marker.tabIndex = 0;
+    marker.setAttribute('role', 'button');
+    marker.setAttribute('aria-label', h.label);
+    marker.onclick = () => openClue(h.id);
+    marker.onkeydown = (e) => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openClue(h.id); } };
+    layer.appendChild(marker);
   });
 
   const list = document.getElementById('hotspotList');

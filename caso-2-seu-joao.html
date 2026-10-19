@@ -62,12 +62,16 @@
   #teacherLockScreen{z-index:10000;}
 
   /* cena isométrica */
-  .scene-wrap{position:relative; width:100%; border-radius:18px; overflow:hidden; border:1px solid var(--line); margin:1rem 0; background:radial-gradient(ellipse at 50% 15%, var(--cream-deep), var(--cream) 70%); padding:0.6rem;}
-  .scene-wrap svg{width:100%; display:block;}
-  .iso-item{cursor:pointer; transition:filter .15s ease;}
-  .iso-item:hover{filter:brightness(1.14) drop-shadow(0 0 8px rgba(226,102,28,0.55));}
-  .iso-item.found{filter:saturate(0.55);}
-  .iso-item:focus-visible{outline:3px solid var(--teal); outline-offset:2px;}
+  .scene-wrap{position:relative; width:100%; border-radius:18px; overflow:hidden; border:1px solid var(--line); margin:1rem 0; background:var(--ink); box-shadow:var(--shadow-card);}
+  .scene-wrap img{width:100%; display:block;}
+  #hotspotLayer{position:absolute; inset:0;}
+  .hotspot-marker{position:absolute; width:46px; height:46px; margin-left:-23px; margin-top:-23px; border-radius:50%;
+    background:rgba(255,253,249,0.94); border:3px solid var(--amber); display:flex; align-items:center; justify-content:center;
+    font-size:1.35rem; cursor:pointer; box-shadow:0 3px 10px rgba(36,26,16,0.4); animation:iso-pulse 2.2s infinite;}
+  .hotspot-marker:hover{transform:scale(1.08); filter:brightness(1.05);}
+  .hotspot-marker:focus-visible{outline:3px solid var(--teal); outline-offset:2px;}
+  .hotspot-marker.found{border-color:var(--teal); background:rgba(220,239,234,0.96); animation:none;}
+  @keyframes iso-pulse{0%{box-shadow:0 0 0 0 rgba(226,102,28,0.5), 0 3px 10px rgba(36,26,16,0.4);} 70%{box-shadow:0 0 0 14px rgba(226,102,28,0), 0 3px 10px rgba(36,26,16,0.4);} 100%{box-shadow:0 0 0 0 rgba(226,102,28,0), 0 3px 10px rgba(36,26,16,0.4);}}
   .scene-hint{font-family:var(--font-mono); font-size:0.72rem; color:var(--ink-soft); text-align:center; margin:0.3rem 0 0.9rem;}
 
   .hotspot-list{display:flex; flex-wrap:wrap; gap:0.5rem; margin:0.9rem 0;}
@@ -161,8 +165,11 @@
     <button class="btn btn-ghost btn-sm" onclick="openModal('modalChat')">💬 Conversar com João</button>
   </div>
 
-  <div class="scene-wrap" id="sceneWrap"></div>
-  <p class="scene-hint">Passe o mouse ou o toque pelos móveis e objetos da casa — clique nos que parecerem relevantes.</p>
+  <div class="scene-wrap">
+    <img src="caso-2-cena.jpg" alt="Cena da visita domiciliar — Seu João">
+    <div id="hotspotLayer"></div>
+  </div>
+  <p class="scene-hint">Passe o mouse ou o toque pela foto da cena — clique nos pontos destacados.</p>
   <div class="hotspot-list" id="hotspotList"></div>
 
   <div class="footer-nav">
@@ -254,260 +261,12 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/* ===================== ISOROOM (gerador de cena isométrica) ===================== */
-/* ===================== ISOROOM — gerador de cena isométrica estilo "casinha" =====================
-   Projeção isométrica 2:1. Cada objeto é desenhado como uma caixa com 3 faces sombreadas
-   (topo claro, lateral direita média, lateral esquerda escura) + um ícone centralizado no topo.
-   Uso: isoRoomSVG({ cols, rows, wallHeight, floorColor, wallColor, items, hotspotState, onClickAttr })
-*/
-(function(global){
-
-  function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
-
-  function hexToHsl(hex){
-    hex = hex.replace('#','');
-    const r = parseInt(hex.substr(0,2),16)/255, g = parseInt(hex.substr(2,2),16)/255, b = parseInt(hex.substr(4,2),16)/255;
-    const max = Math.max(r,g,b), min = Math.min(r,g,b);
-    let h,s,l = (max+min)/2;
-    if(max===min){ h=s=0; }
-    else{
-      const d = max-min;
-      s = l>0.5 ? d/(2-max-min) : d/(max+min);
-      switch(max){
-        case r: h = (g-b)/d + (g<b?6:0); break;
-        case g: h = (b-r)/d + 2; break;
-        case b: h = (r-g)/d + 4; break;
-      }
-      h/=6;
-    }
-    return [h*360, s*100, l*100];
-  }
-  function hslToHex(h,s,l){
-    h/=360; s/=100; l/=100;
-    let r,g,b;
-    if(s===0){ r=g=b=l; }
-    else{
-      const hue2rgb=(p,q,t)=>{ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; };
-      const q = l<0.5 ? l*(1+s) : l+s-l*s;
-      const p = 2*l-q;
-      r = hue2rgb(p,q,h+1/3); g = hue2rgb(p,q,h); b = hue2rgb(p,q,h-1/3);
-    }
-    const toHex = x => Math.round(clamp(x*255,0,255)).toString(16).padStart(2,'0');
-    return '#'+toHex(r)+toHex(g)+toHex(b);
-  }
-  function shade(hex, dl){ // dl: delta lightness in percentage points, +lighter -darker
-    const [h,s,l] = hexToHsl(hex);
-    return hslToHex(h, s, clamp(l+dl, 2, 97));
-  }
-
-  function proj(gx, gy, gz, tileW, tileH, originX, originY, heightPx){
-    const x = originX + (gx - gy) * (tileW/2);
-    const y = originY + (gx + gy) * (tileH/2) - (gz * heightPx);
-    return [x,y];
-  }
-
-  function pathFrom(pts){
-    return 'M ' + pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L ') + ' Z';
-  }
-
-  /*
-    items: [{
-      id, gx, gy, w, d, h,       // posição/tamanho em "tiles" (h em unidades verticais, px via heightUnitPx)
-      color,                       // cor base
-      icon,                        // emoji exibido no topo
-      label,                       // rótulo (title/acessibilidade)
-      flat (opcional bool)         // true = desenha só um "tapete" fino (ex: tapete, mancha) em vez de caixa
-      found (opcional bool)        // já investigado?
-      onClick (string JS opcional) // atributo onclick customizado; senão usa data-hotspot + listener externo
-    }]
-  */
-  function isoRoomSVG(opts){
-    const cols = opts.cols || 6;
-    const rows = opts.rows || 6;
-    const tileW = opts.tileW || 96;
-    const tileH = tileW/2;
-    const heightUnitPx = opts.heightUnitPx || 34;
-    const wallHeightUnits = opts.wallHeight || 4;
-    const pad = 60;
-    const originX = pad + rows*tileW/2; // leftmost point of floor diamond sits near x=pad
-    const originY = pad + 10;
-    const floorColor = opts.floorColor || '#C9A876';
-    const wallColorBack = opts.wallColorBack || opts.wallColor || '#E7D9BE';
-    const wallColorSide = opts.wallColorSide || shade(wallColorBack, -8);
-
-    const svgW = pad*2 + (cols+rows)*tileW/2;
-    const svgH = pad*2 + (cols+rows)*tileH/2 + wallHeightUnits*heightUnitPx + 40;
-
-    let defs = `
-      <defs>
-        <linearGradient id="wallGradBack" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${shade(wallColorBack,6)}"/>
-          <stop offset="100%" stop-color="${shade(wallColorBack,-10)}"/>
-        </linearGradient>
-        <linearGradient id="wallGradSide" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${shade(wallColorSide,6)}"/>
-          <stop offset="100%" stop-color="${shade(wallColorSide,-10)}"/>
-        </linearGradient>
-      </defs>`;
-    let parts = [];
-
-    // ---------- paredes (fundo) ----------
-    // Parede de fundo esquerda: aresta gy=0, gx de 0..cols, subindo wallHeightUnits
-    {
-      const A = proj(0,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const B = proj(cols,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const At = proj(0,0,wallHeightUnits,tileW,tileH,originX,originY,heightUnitPx);
-      const Bt = proj(cols,0,wallHeightUnits,tileW,tileH,originX,originY,heightUnitPx);
-      parts.push(`<path d="${pathFrom([A,B,Bt,At])}" fill="url(#wallGradBack)" />`);
-    }
-    // Parede de fundo direita: aresta gx=0, gy de 0..rows
-    {
-      const A = proj(0,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const D = proj(0,rows,0,tileW,tileH,originX,originY,heightUnitPx);
-      const At = proj(0,0,wallHeightUnits,tileW,tileH,originX,originY,heightUnitPx);
-      const Dt = proj(0,rows,wallHeightUnits,tileW,tileH,originX,originY,heightUnitPx);
-      parts.push(`<path d="${pathFrom([A,D,Dt,At])}" fill="url(#wallGradSide)" />`);
-    }
-    // rodapé sutil nas paredes
-    {
-      const A = proj(0,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const B = proj(cols,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const Askirt = proj(0,0,0.5,tileW,tileH,originX,originY,heightUnitPx);
-      const Bskirt = proj(cols,0,0.5,tileW,tileH,originX,originY,heightUnitPx);
-      parts.push(`<path d="${pathFrom([A,B,Bskirt,Askirt])}" fill="${shade(wallColorBack,-14)}" opacity="0.55"/>`);
-    }
-
-    // ---------- piso ----------
-    {
-      const A = proj(0,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const B = proj(cols,0,0,tileW,tileH,originX,originY,heightUnitPx);
-      const C = proj(cols,rows,0,tileW,tileH,originX,originY,heightUnitPx);
-      const D = proj(0,rows,0,tileW,tileH,originX,originY,heightUnitPx);
-      parts.push(`<path d="${pathFrom([A,B,C,D])}" fill="${floorColor}" stroke="${shade(floorColor,-10)}" stroke-width="1"/>`);
-      // linhas de tábua sutis (ripas do piso)
-      let planks = '';
-      for(let i=1;i<cols;i++){
-        const p1 = proj(i,0,0,tileW,tileH,originX,originY,heightUnitPx);
-        const p2 = proj(i,rows,0,tileW,tileH,originX,originY,heightUnitPx);
-        planks += `<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p2[0].toFixed(1)}" y2="${p2[1].toFixed(1)}" stroke="${shade(floorColor,-6)}" stroke-width="1" opacity="0.4"/>`;
-      }
-      parts.push(`<g>${planks}</g>`);
-    }
-
-    // ---------- itens (ordenados por profundidade: gx+gy crescente desenha por último = na frente) ----------
-    const items = (opts.items||[]).slice().sort((a,b)=> (a.gx+a.gy) - (b.gx+b.gy));
-    const hotArea = [];
-
-    items.forEach(it=>{
-      const found = !!it.found;
-      const baseColor = found ? shade(it.color, 10) : it.color;
-      const w = it.w||1, d = it.d||1, h = it.h||1;
-      const gx=it.gx, gy=it.gy;
-
-      if(it.type === 'stairs'){
-        const steps = it.steps || 4;
-        const stepDepth = d/steps;
-        let g = `<g class="iso-item${found?' found':''}" data-hotspot="${it.id}" tabindex="0" role="button" aria-label="${(it.label||'').replace(/"/g,'&quot;')}">`;
-        for(let s=0; s<steps; s++){
-          const sgy = gy + s*stepDepth;
-          const sh = h * ((s+1)/steps);
-          const A2 = proj(gx,sgy,0,tileW,tileH,originX,originY,heightUnitPx);
-          const B2 = proj(gx+w,sgy,0,tileW,tileH,originX,originY,heightUnitPx);
-          const C2 = proj(gx+w,sgy+stepDepth,0,tileW,tileH,originX,originY,heightUnitPx);
-          const D2 = proj(gx,sgy+stepDepth,0,tileW,tileH,originX,originY,heightUnitPx);
-          const At2 = proj(gx,sgy,sh,tileW,tileH,originX,originY,heightUnitPx);
-          const Bt2 = proj(gx+w,sgy,sh,tileW,tileH,originX,originY,heightUnitPx);
-          const Ct2 = proj(gx+w,sgy+stepDepth,sh,tileW,tileH,originX,originY,heightUnitPx);
-          const Dt2 = proj(gx,sgy+stepDepth,sh,tileW,tileH,originX,originY,heightUnitPx);
-          const topC = shade(baseColor, 14), rightC = shade(baseColor,-4), leftC = shade(baseColor,-20);
-          g += `<path d="${pathFrom([D2,C2,Ct2,Dt2])}" fill="${leftC}"/>`;
-          g += `<path d="${pathFrom([B2,C2,Ct2,Bt2])}" fill="${rightC}"/>`;
-          g += `<path d="${pathFrom([At2,Bt2,Ct2,Dt2])}" fill="${topC}" stroke="${shade(baseColor,-25)}" stroke-width="0.6"/>`;
-        }
-        const topMid = proj(gx+w/2, gy+d/2, h, tileW,tileH,originX,originY,heightUnitPx);
-        if(it.icon) g += `<text x="${topMid[0].toFixed(1)}" y="${(topMid[1]-6).toFixed(1)}" font-size="24" text-anchor="middle" style="filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))">${it.icon}</text>`;
-        g += `</g>`;
-        parts.push(g);
-        return;
-      }
-
-      if(it.flat){
-        // "tapete"/mancha fina no chão, ou sobre uma superfície (it.z define a altura)
-        const fz = (it.z!==undefined ? it.z : 0.02);
-        const A = proj(gx,gy,fz,tileW,tileH,originX,originY,heightUnitPx);
-        const B = proj(gx+w,gy,fz,tileW,tileH,originX,originY,heightUnitPx);
-        const C = proj(gx+w,gy+d,fz,tileW,tileH,originX,originY,heightUnitPx);
-        const D = proj(gx,gy+d,fz,tileW,tileH,originX,originY,heightUnitPx);
-        const cx=(A[0]+B[0]+C[0]+D[0])/4, cy=(A[1]+B[1]+C[1]+D[1])/4;
-        const isDecoFlat = !!it.deco;
-        const groupAttrsFlat = isDecoFlat
-          ? `class="iso-deco" style="pointer-events:none;"`
-          : `class="iso-item${found?' found':''}" data-hotspot="${it.id}" tabindex="0" role="button" aria-label="${(it.label||'').replace(/"/g,'&quot;')}"`;
-        parts.push(`<g ${groupAttrsFlat}>
-          <path d="${pathFrom([A,B,C,D])}" fill="${baseColor}" stroke="${shade(baseColor,-18)}" stroke-width="1.2" opacity="0.92"/>
-          ${it.icon? `<text x="${cx.toFixed(1)}" y="${(cy+6).toFixed(1)}" font-size="22" text-anchor="middle">${it.icon}</text>`:''}
-        </g>`);
-        hotArea.push([cx,cy]);
-        return;
-      }
-
-      {
-        const fcx = originX + ((gx+w/2) - (gy+d/2)) * (tileW/2);
-        const fcy = originY + ((gx+w/2) + (gy+d/2)) * (tileH/2);
-        const rx = (w* (tileW/2))*0.62, ry = (d*(tileH/2))*0.62;
-        parts.push(`<ellipse cx="${fcx.toFixed(1)}" cy="${fcy.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="#000" opacity="0.16"/>`);
-      }
-      const A  = proj(gx,gy,0,tileW,tileH,originX,originY,heightUnitPx);
-      const B  = proj(gx+w,gy,0,tileW,tileH,originX,originY,heightUnitPx);
-      const C  = proj(gx+w,gy+d,0,tileW,tileH,originX,originY,heightUnitPx);
-      const D  = proj(gx,gy+d,0,tileW,tileH,originX,originY,heightUnitPx);
-      const At = proj(gx,gy,h,tileW,tileH,originX,originY,heightUnitPx);
-      const Bt = proj(gx+w,gy,h,tileW,tileH,originX,originY,heightUnitPx);
-      const Ct = proj(gx+w,gy+d,h,tileW,tileH,originX,originY,heightUnitPx);
-      const Dt = proj(gx,gy+d,h,tileW,tileH,originX,originY,heightUnitPx);
-
-      const topColor = shade(baseColor, 16);
-      const rightColor = shade(baseColor, -4);   // face B,C,Ct,Bt
-      const leftColor = shade(baseColor, -20);   // face D,C,Ct,Dt
-
-      const cx = (At[0]+Ct[0])/2, cy = (At[1]+Ct[1])/2;
-
-      // itens "deco" (ex: mesa, cama) são só cenário — não recebem clique e
-      // deixam o ponteiro atravessar para o que estiver por cima/atrás deles.
-      const isDeco = !!it.deco;
-      const groupAttrs = isDeco
-        ? `class="iso-deco" style="pointer-events:none;"`
-        : `class="iso-item${found?' found':''}" data-hotspot="${it.id}" tabindex="0" role="button" aria-label="${(it.label||'').replace(/"/g,'&quot;')}"`;
-
-      parts.push(`<g ${groupAttrs}>
-        <path d="${pathFrom([D,C,Ct,Dt])}" fill="${leftColor}"/>
-        <path d="${pathFrom([B,C,Ct,Bt])}" fill="${rightColor}"/>
-        <path d="${pathFrom([At,Bt,Ct,Dt])}" fill="${topColor}" stroke="${shade(baseColor,-25)}" stroke-width="0.6"/>
-        ${it.icon? `<text x="${cx.toFixed(1)}" y="${(cy+7).toFixed(1)}" font-size="26" text-anchor="middle" style="filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))">${it.icon}</text>`:''}
-      </g>`);
-      hotArea.push([cx,cy]);
-    });
-
-    const svg = `<svg viewBox="0 0 ${svgW.toFixed(0)} ${svgH.toFixed(0)}" xmlns="http://www.w3.org/2000/svg" width="100%" style="display:block;">
-      ${defs}
-      <g>${parts.join('\n')}</g>
-    </svg>`;
-    return svg;
-  }
-
-  global.isoRoomSVG = isoRoomSVG;
-  global.isoShade = shade;
-})(typeof window!=='undefined'?window:global);
-
-</script>
-<script>
 const TEACHER_PASSWORD = "professorenf2026";
 const CASE_PASSWORD = "enf4040";
 const PREFIX = "caso2_";
 const ACTIVITY_KEY = PREFIX + "activityLog";
 
 const CASE = {"name": "Seu João", "age": 79, "hotspots": [{"icon": "🦯", "top": 58, "left": 44, "label": "A bengala", "clue": "A bengala de Seu João tem sinais visíveis de conserto improvisado, como se tivesse sido remendada. Não parece muito firme, e ele não demonstra segurança ao apoiar-se nela.", "id": "bengala"}, {"icon": "🪜", "top": 32, "left": 66, "label": "A escada sem corrimão", "clue": "Há degraus na sala sem corrimão. Seu João evita usá-la porque sente falta de ar e dor lombar ao subir.", "id": "escada"}, {"icon": "💉", "top": 82, "left": 27, "label": "Comprovante de vacinação", "clue": "Um papel antigo da UBS mostra que Seu João recebeu a vacina contra influenza há aproximadamente dois anos. Não há registros mais recentes.", "id": "vacina"}, {"icon": "🛋️", "top": 52, "left": 10, "label": "O sofá surrado e rasgado", "clue": "O sofá está em más condições, com molas aparentes em alguns pontos — o mobiliário da sala, de modo geral, é bem desgastado e pode interferir na mobilidade e segurança dentro de casa.", "id": "sofa"}, {"icon": "📺", "top": 45, "left": 93, "label": "A poltrona onde ele está sentado", "clue": "A poltrona é baixa e bem desgastada — dá pra perceber que seria difícil se levantar dela sem apoio firme.", "id": "poltrona"}], "problemsOptions": ["Dor lombar crônica", "Uso inadequado de dispositivo de auxílio à marcha (bengala)", "Risco de queda relacionado ao ambiente (degraus sem corrimão)", "Limitação funcional para caminhar", "Dispneia aos pequenos esforços", "Situação vacinal desatualizada/incompleta", "Mobiliário domiciliar inadequado", "Dificuldade para subir escadas"], "assessmentOptions": ["Avaliação da dor", "Avaliação da mobilidade", "Avaliação da marcha", "Avaliação do equilíbrio", "Avaliação do risco de quedas", "Avaliação da capacidade funcional", "Avaliação do uso da bengala", "Avaliação do ambiente domiciliar", "Avaliação respiratória", "Avaliação da vacinação", "Avaliação nutricional"], "missingAnswer": "Avaliação nutricional", "vaccination": {"birthInfo": "79 anos", "cns": "•••• •••• 8871", "ubs": "UBS de referência não informada", "records": [{"vaccine": "Influenza (gripe)", "lastDose": "~2 anos atrás", "status": "Registro antigo — não tomou este ano"}, {"vaccine": "COVID-19", "lastDose": "—", "status": "Sem registro"}, {"vaccine": "Hepatite B", "lastDose": "—", "status": "Sem registro"}, {"vaccine": "dT (Dupla adulto)", "lastDose": "—", "status": "Sem registro"}, {"vaccine": "Pneumocócica 23-valente", "lastDose": "—", "status": "Sem registro"}]}, "personaSummary": "Homem de 79 anos, convive há mais de dois anos com dor lombar intensa. Tenta manter sua rotina apesar da dor e da dificuldade para caminhar, não gosta muito de reclamar, é do tipo que 'vai levando'. Pode minimizar suas dificuldades.", "speechStyle": ["Essa dor nas costas não me larga.", "Ando devagar, com a bengala mesmo.", "Escada é osso pra mim.", "Não sei direito quais vacinas eu tomei.", "Vou levando."], "knownFacts": ["Sente dor intensa na coluna lombar há mais de dois anos.", "Tem limitação importante para caminhar.", "Usa uma bengala, mas de forma inadequada; nunca foi orientado sobre o uso correto.", "Sente falta de ar em pequenos esforços.", "Tem dificuldade para subir escadas.", "Não tomou a vacina contra influenza este ano.", "Não sabe ao certo quais vacinas já tomou; existe um documento antigo da UBS mostrando uma dose de influenza de aproximadamente dois anos atrás."], "sceneContext": "Você está na sala de Seu João. Ele está sentado em uma poltrona bem desgastada, com a bengala apoiada ao lado. O sofá também está em más condições. Há alguns degraus na sala sem corrimão. Em algum lugar da sala há um papel antigo da UBS sobre vacinação.", "patientResponses": [{"q": "Como está a dor nas costas?", "a": "Essa dor na coluna não me larga há mais de dois anos, viu.", "kw": ["dor", "coluna", "costas", "lombar"]}, {"q": "O senhor consegue caminhar bem?", "a": "Ando bem devagar, com a bengala mesmo. Não é fácil não.", "kw": ["caminhar", "andar", "marcha"]}, {"q": "Como o senhor usa a bengala?", "a": "Uso do jeito que dá... nunca ninguém me explicou direito como é o certo.", "kw": ["bengala", "apoio"]}, {"q": "O senhor sente falta de ar?", "a": "Só quando faço mais força, aí eu canso rápido e fico ofegante.", "kw": ["falta de ar", "ofegante", "cansaco", "respira"]}, {"q": "O senhor tem dificuldade para subir escada?", "a": "Escada é osso pra mim, confesso. Subo bem devagarzinho.", "kw": ["escada", "degrau", "subir"]}, {"q": "O senhor tomou a vacina da gripe esse ano?", "a": "Não, esse ano eu não tomei não.", "kw": ["vacina", "gripe", "influenza"]}, {"q": "O senhor sabe quais vacinas já tomou?", "a": "Olha, nem sei direito quais vacinas eu tomei. Faz tempo.", "kw": ["quais vacinas", "caderneta", "historico vacinal"]}, {"q": "Como o senhor se sente hoje?", "a": "Vou levando, com essa dor de sempre. Vida que segue.", "kw": ["sente hoje", "como esta", "saude"]}]};
-const ROOM = {"cols": 8, "rows": 6, "floorColor": "#C9A876", "wallColorBack": "#E7D9BE", "items": [{"id": "vacina", "gx": 0.3, "gy": 0.3, "w": 0.6, "d": 0.5, "h": 0.1, "color": "#E7DCC0", "icon": "💉", "flat": true}, {"id": "escada", "gx": 4.4, "gy": 0.3, "w": 1.8, "d": 2.2, "h": 1.6, "color": "#9C7A4C", "icon": "🪜", "type": "stairs", "steps": 4}, {"id": "sofa", "gx": 0.3, "gy": 3.6, "w": 2.0, "d": 1.0, "h": 0.9, "color": "#6E4B32", "icon": "🛋️"}, {"id": "poltrona", "gx": 3.6, "gy": 3.6, "w": 1.2, "d": 1.1, "h": 1.0, "color": "#8a5a2b", "icon": "🪑"}, {"id": "bengala", "gx": 6.6, "gy": 4.0, "w": 0.3, "d": 0.3, "h": 1.0, "color": "#4a3220", "icon": "🦯", "flat": true, "z": 0.02}]};
 
 let state = { found: new Set(), apiChatHistory: [], asked: 0 };
 
@@ -572,15 +331,24 @@ function logActivity(type, detail){
   localStorage.setItem(ACTIVITY_KEY, JSON.stringify(log));
 }
 
-/* ---------- CENA ISOMÉTRICA / HOTSPOTS ---------- */
+/* ---------- CENA (FOTO REAL) / HOTSPOTS ---------- */
 function renderScene(){
-  const wrap = document.getElementById('sceneWrap');
-  const itemsWithState = ROOM.items.map(it => ({...it, found: state.found.has(it.id)}));
-  wrap.innerHTML = isoRoomSVG({...ROOM, items: itemsWithState});
-  wrap.querySelectorAll('[data-hotspot]').forEach(el=>{
-    const id = el.getAttribute('data-hotspot');
-    el.addEventListener('click', ()=>openClue(id));
-    el.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openClue(id); } });
+  const layer = document.getElementById('hotspotLayer');
+  layer.innerHTML = '';
+  CASE.hotspots.forEach(h => {
+    const found = state.found.has(h.id);
+    const marker = document.createElement('div');
+    marker.className = 'hotspot-marker' + (found ? ' found' : '');
+    marker.style.top = h.top + '%';
+    marker.style.left = h.left + '%';
+    marker.textContent = h.icon;
+    marker.title = h.label;
+    marker.tabIndex = 0;
+    marker.setAttribute('role', 'button');
+    marker.setAttribute('aria-label', h.label);
+    marker.onclick = () => openClue(h.id);
+    marker.onkeydown = (e) => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openClue(h.id); } };
+    layer.appendChild(marker);
   });
 
   const list = document.getElementById('hotspotList');
